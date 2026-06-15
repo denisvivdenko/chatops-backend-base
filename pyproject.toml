@@ -6,4 +6,8 @@ build-backend = "uv_build"
 name = "chatops"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.137.1",
+    "httpx2>=2.4.0",
+    "pytest>=9.1.0",
+]
