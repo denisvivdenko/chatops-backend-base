@@ -1,6 +1,6 @@
 import uuid
 import time
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -19,6 +19,15 @@ class Chat(BaseModel):
 
 class CreateChatResponse(BaseModel):
     chat: Chat
+
+
+class FetchChatsResponse(BaseModel):
+    chats: list[Chat]
+
+
+@app.get("/chats", response_model=FetchChatsResponse)
+def fetch_chats(limit: int = Query(default=10, ge=1)) -> FetchChatsResponse:
+    return FetchChatsResponse(chats=[])
 
 
 @app.post("/chats", status_code=201, response_model=CreateChatResponse)
