@@ -20,6 +20,6 @@ def test_create_chat_returns_chat(client: TestClient) -> None:
     assert response.status_code == 201
     chat = response.json()["chat"]
     assert isinstance(chat["id"], str)
-    assert isinstance(chat["title"], str)
-    assert isinstance(chat["last_activity_at"], int)
+    assert isinstance(chat["title"], str) and len(chat["title"]) > 0
+    assert isinstance(chat["last_activity_at"], int) and chat["last_activity_at"] >= chat["created_at"]
     assert isinstance(chat["created_at"], int)
