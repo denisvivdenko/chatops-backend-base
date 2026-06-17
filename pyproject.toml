@@ -10,4 +10,5 @@ dependencies = [
     "fastapi>=0.137.1",
     "httpx2>=2.4.0",
     "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
 ]

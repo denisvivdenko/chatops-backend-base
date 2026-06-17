@@ -1,7 +1,29 @@
 import time
+import pytest
+from typing import AsyncIterator
 
 from chatops.services.chat_service import ChatService
-from chatops.domain.chat import MessageRole, MessageStatus
+from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
+from chatops.domain.chat import MessageRole, MessageStatus, MessageStreamEvent
+
+
+class FakeMessageObserver(MessageObserver):
+    def __init__(self, tokens: list[str]) -> None:
+        self._tokens = tokens
+
+    @classmethod
+    async def create(cls, chat_id: str, message_id: str) -> "FakeMessageObserver":
+        if chat_id == "unknown-chat-id" or message_id == "unknown-message-id":
+            raise MessageNotObservableError
+        return cls(tokens=["Hi", " there"])
+
+    def __aiter__(self) -> AsyncIterator[MessageStreamEvent]:
+        return self._stream()
+
+    async def _stream(self) -> AsyncIterator[MessageStreamEvent]:
+        for token in self._tokens:
+            yield MessageStreamEvent(token=token, status=MessageStatus.PENDING)
+        yield MessageStreamEvent(token="", status=MessageStatus.COMPLETE)
 
 
 def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
@@ -21,7 +43,8 @@ def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
     assert chats_limited[0].id == second_chat.id
 
 
-def test_create_chat_produces_user_message_followed_by_pending_assistant_message() -> None:
+@pytest.mark.asyncio
+async def test_create_chat_produces_messages_and_streams_assistant_response() -> None:
     service = ChatService()
 
     chat = service.create_chat("Hello")
@@ -37,4 +60,15 @@ def test_create_chat_produces_user_message_followed_by_pending_assistant_message
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
-    assert assistant_message.content == ""
+
+    observer = await FakeMessageObserver.create(chat.id, assistant_message.id)
+
+    stream = [e async for e in observer]
+    assert stream[-1].status == MessageStatus.COMPLETE
+    assert "".join(e.token for e in stream) == "Hi there"
+
+
+@pytest.mark.asyncio
+async def test_observe_unknown_message_raises() -> None:
+    with pytest.raises(MessageNotObservableError):
+        await FakeMessageObserver.create("unknown-chat-id", "unknown-message-id")

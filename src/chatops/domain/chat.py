@@ -26,3 +26,8 @@ class Message(BaseModel):
     status: MessageStatus
     content: str
     created_at: int
+
+
+class MessageStreamEvent(BaseModel):
+    token: str
+    status: MessageStatus
