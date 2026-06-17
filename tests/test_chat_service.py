@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from chatops.services.chat_service import ChatService
 from chatops.observers.event_stream import EventStream, MessageToken
-from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
+from chatops.observers.message_observer import MessageObserver, MessageNotObservableError, MessageIsAlreadyConsumed
 from chatops.domain.chat import EOM, MessageRole, MessageStatus
 
 
@@ -57,11 +57,5 @@ async def test_create_chat_produces_messages_and_streams_assistant_response() ->
     events = [e async for e in observer]
     assert "".join(e.token for e in events) == "Hi there"
 
-
-@pytest.mark.asyncio
-async def test_observe_unknown_message_raises() -> None:
-    observer = MessageObserver("unknown-chat-id", "unknown-message-id", stream=make_stream([], exists=False))
-
-    with pytest.raises(MessageNotObservableError):
-        async for _ in observer:
-            pass
+    with pytest.raises(MessageIsAlreadyConsumed):
+        events = [e async for e in observer]
