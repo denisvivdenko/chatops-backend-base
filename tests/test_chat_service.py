@@ -1,3 +1,4 @@
+import asyncio
 import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock
@@ -12,7 +13,7 @@ def make_stream(tokens: list[str], exists: bool = True) -> EventStream:
     stream = MagicMock(spec=EventStream)
     stream.exists = AsyncMock(return_value=exists)
     stream.listen_for_message_tokens = AsyncMock(return_value=[
-        MessageToken(seq_id=i, token=token) for i, token in enumerate([*tokens, EOM])
+        MessageToken(seq_id=i, token=token) for i, token in enumerate([*tokens])
     ])
     return stream
 
@@ -52,7 +53,7 @@ async def test_create_chat_produces_messages_and_streams_assistant_response() ->
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
 
-    observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there"]))
+    observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM]))
 
     events = [e async for e in observer]
     assert "".join(e.token for e in events) == "Hi there"
