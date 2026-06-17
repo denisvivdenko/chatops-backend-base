@@ -28,6 +28,9 @@ class Message(BaseModel):
     created_at: int
 
 
+EOM = "<EOM>"
+
+
 class MessageStreamEvent(BaseModel):
+    seq_id: int
     token: str
-    status: MessageStatus

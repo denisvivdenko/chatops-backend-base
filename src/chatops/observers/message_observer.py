@@ -1,6 +1,6 @@
 from typing import AsyncIterator
 
-from chatops.domain.chat import MessageStatus, MessageStreamEvent
+from chatops.domain.chat import EOM, MessageStreamEvent
 from chatops.observers.event_stream import EventStream
 
 
@@ -20,6 +20,13 @@ class MessageObserver:
     async def _iterate(self) -> AsyncIterator[MessageStreamEvent]:
         if not await self._stream.exists(self._chat_id, self._message_id):
             raise MessageNotObservableError(f"Message {self._message_id} is not observable")
-        async for token in self._stream.read(self._chat_id, self._message_id):
-            yield MessageStreamEvent(token=token, status=MessageStatus.PENDING)
-        yield MessageStreamEvent(token="", status=MessageStatus.COMPLETE)
+
+        seq_id = 0
+        while True:
+            entries = await self._stream.listen_for_message_tokens(self._chat_id, self._message_id, from_seq_id=seq_id)
+            for seq_id, token in sorted(entries, key=lambda e: e.seq_id):
+                if token == EOM:
+                    return
+                yield MessageStreamEvent(seq_id=seq_id, token=token)
+            if entries:
+                seq_id += 1

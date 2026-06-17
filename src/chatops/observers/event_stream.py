@@ -1,5 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
+from typing import NamedTuple
+
+
+class MessageToken(NamedTuple):
+    seq_id: int
+    token: str
 
 
 class EventStream(ABC):
@@ -8,5 +13,5 @@ class EventStream(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def read(self, chat_id: str, message_id: str) -> AsyncIterator[str]:
+    async def listen_for_message_tokens(self, chat_id: str, message_id: str, from_seq_id: int) -> list[MessageToken]:
         raise NotImplementedError
