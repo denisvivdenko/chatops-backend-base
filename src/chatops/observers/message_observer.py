@@ -1,7 +1,7 @@
 from typing import AsyncIterator
 
 from chatops.domain.chat import EOM, MessageStreamEvent
-from chatops.observers.event_stream import EventStream
+from chatops.observers.event_stream import EventStream, StreamNotFoundError
 
 
 class MessageNotObservableError(Exception):
@@ -26,15 +26,18 @@ class MessageObserver:
         return self._iterate()
 
     async def _iterate(self) -> AsyncIterator[MessageStreamEvent]:
-        if not await self._stream.exists(self._chat_id, self._message_id):
-            raise MessageNotObservableError(f"Message {self._message_id} is not observable")
-
+        stream_key = f"{self._chat_id}:{self._message_id}"
+        last_id = None
         seq_id = 0
-        while True:
-            entries = await self._stream.listen_for_message_tokens(self._chat_id, self._message_id, from_seq_id=seq_id)
-            for seq_id, token in sorted(entries, key=lambda e: e.seq_id):
-                if token == EOM:
-                    return
-                yield MessageStreamEvent(seq_id=seq_id, token=token)
-            if entries:
-                seq_id += 1
+        try:
+            while True:
+                entries = await self._stream.read(stream_key, last_id=last_id)
+                for entry in entries:
+                    token = entry.data["token"]
+                    if token == EOM:
+                        return
+                    yield MessageStreamEvent(seq_id=seq_id, token=token)
+                    last_id = entry.id
+                    seq_id += 1
+        except StreamNotFoundError:
+            raise MessageNotObservableError(f"Message {self._message_id} is not observable")

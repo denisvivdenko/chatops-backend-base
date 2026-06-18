@@ -2,16 +2,17 @@ from abc import ABC, abstractmethod
 from typing import NamedTuple
 
 
-class MessageToken(NamedTuple):
-    seq_id: int
-    token: str
+class StreamEntry(NamedTuple):
+    id: str
+    data: dict[str, str]
+
+
+class StreamNotFoundError(Exception):
+    pass
 
 
 class EventStream(ABC):
     @abstractmethod
-    async def exists(self, chat_id: str, message_id: str) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def listen_for_message_tokens(self, chat_id: str, message_id: str, from_seq_id: int) -> list[MessageToken]:
+    async def read(self, stream_key: str, last_id: str | None = None) -> list[StreamEntry]:
+        """Raises StreamNotFoundError if the stream does not exist."""
         raise NotImplementedError

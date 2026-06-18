@@ -1,9 +1,6 @@
-from chatops.observers.event_stream import EventStream, MessageToken
+from chatops.observers.event_stream import EventStream, StreamEntry, StreamNotFoundError
 
 
 class RedisEventStream(EventStream):
-    async def exists(self, chat_id: str, message_id: str) -> bool:
-        raise NotImplementedError
-
-    async def listen_for_message_tokens(self, chat_id: str, message_id: str, from_seq_id: int) -> list[MessageToken]:
+    async def read(self, stream_key: str, last_id: str | None = None) -> list[StreamEntry]:
         raise NotImplementedError
