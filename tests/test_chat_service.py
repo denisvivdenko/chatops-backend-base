@@ -53,7 +53,11 @@ async def test_create_chat_produces_messages_and_streams_assistant_response() ->
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
 
-    observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM]))
+    with pytest.raises(MessageNotObservableError):
+        observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM], exists=False))
+        events = [e async for e in observer]
+
+    observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM], exists=True))
 
     events = [e async for e in observer]
     assert "".join(e.token for e in events) == "Hi there"
