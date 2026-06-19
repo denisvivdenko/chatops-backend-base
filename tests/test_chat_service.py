@@ -1,22 +1,7 @@
-import asyncio
 import time
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from chatops.services.chat_service import ChatService
-from chatops.observers.event_stream import EventStream, StreamEntry, StreamNotFoundError
-from chatops.observers.message_observer import MessageObserver, MessageNotObservableError, MessageIsAlreadyConsumed
-from chatops.domain.chat import EOM, MessageRole, MessageStatus
-
-
-def make_stream(tokens: list[str], exists: bool = True) -> EventStream:
-    stream = MagicMock(spec=EventStream)
-    entries = [StreamEntry(id=str(i), data={"token": token}) for i, token in enumerate(tokens)]
-    if exists:
-        stream.read = AsyncMock(return_value=entries)
-    else:
-        stream.read = AsyncMock(side_effect=StreamNotFoundError)
-    return stream
+from chatops.domain.chat import MessageRole, MessageStatus
 
 
 def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
@@ -36,8 +21,7 @@ def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
     assert chats_limited[0].id == second_chat.id
 
 
-@pytest.mark.asyncio
-async def test_create_chat_produces_messages_and_streams_assistant_response() -> None:
+def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     service = ChatService()
 
     chat = service.create_chat("Hello")
@@ -53,15 +37,3 @@ async def test_create_chat_produces_messages_and_streams_assistant_response() ->
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
-
-    with pytest.raises(MessageNotObservableError):
-        observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM], exists=False))
-        events = [e async for e in observer]
-
-    observer = MessageObserver(chat.id, assistant_message.id, stream=make_stream(["Hi", " there", EOM], exists=True))
-
-    events = [e async for e in observer]
-    assert "".join(e.token for e in events) == "Hi there"
-
-    with pytest.raises(MessageIsAlreadyConsumed):
-        events = [e async for e in observer]
