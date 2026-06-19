@@ -1,0 +1,32 @@
+import threading
+
+from chatops.domain.chat import Chat, Message
+
+
+class ChatRepository:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._chats: list[Chat] = []
+        self._messages: dict[str, list[Message]] = {}
+
+    def save_chat(self, chat: Chat) -> None:
+        with self._lock:
+            self._chats.append(chat)
+
+    def fetch_chats(self, limit: int) -> list[Chat]:
+        with self._lock:
+            sorted_chats = sorted(self._chats, key=lambda c: c.last_activity_at, reverse=True)
+            return sorted_chats[:limit]
+
+    def save_message(self, chat_id: str, message: Message) -> None:
+        with self._lock:
+            messages = self._messages.setdefault(chat_id, [])
+            for i, m in enumerate(messages):
+                if m.id == message.id:
+                    messages[i] = message
+                    return
+            messages.append(message)
+
+    def fetch_messages(self, chat_id: str) -> list[Message]:
+        with self._lock:
+            return list(self._messages.get(chat_id, []))

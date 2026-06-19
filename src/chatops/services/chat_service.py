@@ -2,12 +2,14 @@ import uuid
 import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
+from chatops.repositories.chat_repository import ChatRepository
+from chatops.jobs.job_stream import JobStream, AssistantJob
 
 
 class ChatService:
-    def __init__(self) -> None:
-        self._chats: list[Chat] = []
-        self._messages: dict[str, list[Message]] = {}
+    def __init__(self, chat_repository: ChatRepository | None = None, jobs_stream: JobStream | None = None) -> None:
+        self._repo = chat_repository or ChatRepository()
+        self._jobs = jobs_stream or JobStream()
 
     def create_chat(self, first_message: str) -> Chat:
         now = int(time.time() * 1000)
@@ -17,28 +19,28 @@ class ChatService:
             last_activity_at=now,
             created_at=now,
         )
-        self._chats.append(chat)
-        self._messages[chat.id] = [
-            Message(
-                id=str(uuid.uuid4()),
-                role=MessageRole.USER,
-                status=MessageStatus.COMPLETE,
-                content=first_message,
-                created_at=now,
-            ),
-            Message(
-                id=str(uuid.uuid4()),
-                role=MessageRole.ASSISTANT,
-                status=MessageStatus.PENDING,
-                content="",
-                created_at=now,
-            ),
-        ]
+        user_message = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.USER,
+            status=MessageStatus.COMPLETE,
+            content=first_message,
+            created_at=now,
+        )
+        assistant_message = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.ASSISTANT,
+            status=MessageStatus.PENDING,
+            content="",
+            created_at=now,
+        )
+        self._repo.save_chat(chat)
+        self._repo.save_message(chat.id, user_message)
+        self._repo.save_message(chat.id, assistant_message)
+        self._jobs.publish(AssistantJob(chat_id=chat.id, message_id=assistant_message.id))
         return chat
 
     def fetch_chats(self, limit: int) -> list[Chat]:
-        sorted_chats = sorted(self._chats, key=lambda c: c.last_activity_at, reverse=True)
-        return sorted_chats[:limit]
+        return self._repo.fetch_chats(limit)
 
     def fetch_messages(self, chat_id: str) -> list[Message]:
-        return self._messages.get(chat_id, [])
+        return self._repo.fetch_messages(chat_id)
