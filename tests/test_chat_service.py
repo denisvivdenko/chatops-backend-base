@@ -1,10 +1,13 @@
 import time
+import pytest
 
 from chatops.services.chat_service import ChatService
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.jobs.job_stream import JobStream
-from chatops.workers.worker import Worker
+from chatops.workers.worker import Worker, HARDCODED_RESPONSE
+from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.observers.message_observer import MessageObserver
 
 
 def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
@@ -24,8 +27,10 @@ def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
     assert chats_limited[0].id == second_chat.id
 
 
-def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
+@pytest.mark.asyncio
+async def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     job_stream = JobStream()
+    event_stream = InMemoryEventStream()
     chat_repository = ChatRepository()
 
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
@@ -44,10 +49,16 @@ def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
 
-    worker = Worker(chat_repository=chat_repository, jobs_stream=job_stream)
+    worker = Worker(
+        chat_repository=chat_repository, 
+        jobs_stream=job_stream,
+        event_stream=event_stream
+    )
     worker.start()
 
-    time.sleep(2)
+    message_observer = MessageObserver(chat.id, assistant_message.id, event_stream)
+    events = [e async for e in message_observer]
+    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
 
     messages = service.fetch_messages(chat.id)
 
@@ -56,3 +67,4 @@ def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.COMPLETE
+    assert assistant_message.content == HARDCODED_RESPONSE
