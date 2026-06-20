@@ -26,9 +26,9 @@ class Worker:
 
     def _process(self, job: AssistantJob) -> None:
         stream_key = f"{job.chat_id}:{job.message_id}"
-        step = 3
-        for start in range(0, len(HARDCODED_RESPONSE), step):
-            self._event_stream.write(stream_key, {"token": HARDCODED_RESPONSE[start:start + step]})
+        tokens = HARDCODED_RESPONSE.split()
+        for t in tokens:
+            self._event_stream.write(stream_key, {"token": t})
         self._event_stream.write(stream_key, {"token": EOM})
 
         for message in self._repo.fetch_messages(job.chat_id):

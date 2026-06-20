@@ -58,13 +58,29 @@ async def test_create_chat_produces_user_and_pending_assistant_messages() -> Non
 
     message_observer = MessageObserver(chat.id, assistant_message.id, event_stream)
     events = [e async for e in message_observer]
-    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
+    assert " ".join(e.token for e in events) == HARDCODED_RESPONSE
 
     messages = service.fetch_messages(chat.id)
-
     assert len(messages) == 2
 
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.COMPLETE
     assert assistant_message.content == HARDCODED_RESPONSE
+
+    assistant_message = service.send_message(chat.id, "What is the weather today?")
+    assert assistant_message.role == MessageRole.ASSISTANT
+    assert assistant_message.status == MessageStatus.PENDING
+
+    messages = service.fetch_messages(chat.id)
+    assert len(messages) == 4
+    assert messages[-1].role == MessageRole.ASSISTANT
+    assert messages[-1].status == MessageStatus.PENDING
+
+    message_observer = MessageObserver(chat.id, assistant_message.id, event_stream)
+    events = [e async for e in message_observer]
+    assert " ".join(e.token for e in events) == HARDCODED_RESPONSE
+
+    messages = service.fetch_messages(chat.id)
+    assert len(messages) == 4
+    assert messages[-1].status == MessageStatus.COMPLETE

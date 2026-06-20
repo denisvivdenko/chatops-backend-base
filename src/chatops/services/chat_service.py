@@ -39,6 +39,27 @@ class ChatService:
         self._jobs.publish(AssistantJob(chat_id=chat.id, message_id=assistant_message.id))
         return chat
 
+    def send_message(self, chat_id: str, content: str) -> Message:
+        now = int(time.time() * 1000)
+        user_message = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.USER,
+            status=MessageStatus.COMPLETE,
+            content=content,
+            created_at=now,
+        )
+        assistant_message = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.ASSISTANT,
+            status=MessageStatus.PENDING,
+            content="",
+            created_at=now,
+        )
+        self._repo.save_message(chat_id, user_message)
+        self._repo.save_message(chat_id, assistant_message)
+        self._jobs.publish(AssistantJob(chat_id=chat_id, message_id=assistant_message.id))
+        return assistant_message
+
     def fetch_chats(self, limit: int) -> list[Chat]:
         return self._repo.fetch_chats(limit)
 
