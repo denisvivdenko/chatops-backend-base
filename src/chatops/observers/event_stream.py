@@ -12,6 +12,10 @@ class StreamNotFoundError(Exception):
 
 
 class EventStream(ABC):
+    @staticmethod
+    def stream_key(chat_id: str, message_id: str) -> str:
+        return f"{chat_id}:{message_id}"
+
     @abstractmethod
     async def read(self, stream_key: str, last_id: str | None = None) -> list[StreamEntry]:
         """Raises StreamNotFoundError if the stream does not exist."""

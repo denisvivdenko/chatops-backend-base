@@ -25,7 +25,7 @@ class Worker:
                 self._process(job)
 
     def _process(self, job: AssistantJob) -> None:
-        stream_key = f"{job.chat_id}:{job.message_id}"
+        stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
         tokens = HARDCODED_RESPONSE.split()
         for t in tokens:
             self._event_stream.write(stream_key, {"token": t})
