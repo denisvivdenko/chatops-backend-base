@@ -11,9 +11,9 @@ class LastAssistantMessageIsNotFinished(Exception):
 
 
 class ChatService:
-    def __init__(self, chat_repository: ChatRepository | None = None, jobs_stream: JobStream | None = None) -> None:
-        self._repo = chat_repository or InMemoryChatRepository()
-        self._jobs = jobs_stream or InMemoryJobStream()
+    def __init__(self, chat_repository: ChatRepository, jobs_stream: JobStream) -> None:
+        self._repo = chat_repository
+        self._jobs = jobs_stream
 
     def create_chat(self, first_message: str) -> Chat:
         now = int(time.time() * 1000)

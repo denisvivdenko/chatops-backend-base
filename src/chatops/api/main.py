@@ -2,9 +2,11 @@ from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
 from chatops.services.chat_service import ChatService
+from chatops.repositories.chat_repository import InMemoryChatRepository
+from chatops.jobs.job_stream import InMemoryJobStream
 
 app = FastAPI()
-chat_service = ChatService()
+chat_service = ChatService(chat_repository=InMemoryChatRepository(), jobs_stream=InMemoryJobStream())
 
 
 class ChatResponse(BaseModel):
