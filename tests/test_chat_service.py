@@ -1,7 +1,7 @@
 import time
 import pytest
 
-from chatops.services.chat_service import ChatService
+from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.jobs.job_stream import JobStream
@@ -48,6 +48,9 @@ async def test_create_chat_produces_user_and_pending_assistant_messages() -> Non
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
+
+    with pytest.raises(LastAssistantMessageIsNotFinished):
+        assistant_message = service.send_message(chat.id, "What is the weather today?")
 
     worker = Worker(
         chat_repository=chat_repository, 

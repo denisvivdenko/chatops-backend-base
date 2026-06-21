@@ -6,6 +6,10 @@ from chatops.repositories.chat_repository import ChatRepository
 from chatops.jobs.job_stream import JobStream, AssistantJob
 
 
+class LastAssistantMessageIsNotFinished(Exception):
+    pass
+
+
 class ChatService:
     def __init__(self, chat_repository: ChatRepository | None = None, jobs_stream: JobStream | None = None) -> None:
         self._repo = chat_repository or ChatRepository()
@@ -40,6 +44,10 @@ class ChatService:
         return chat
 
     def send_message(self, chat_id: str, content: str) -> Message:
+        messages = self._repo.fetch_messages(chat_id)
+        if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
+            raise LastAssistantMessageIsNotFinished()
+
         now = int(time.time() * 1000)
         user_message = Message(
             id=str(uuid.uuid4()),
