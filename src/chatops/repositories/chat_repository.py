@@ -9,6 +9,9 @@ class ChatRepository(ABC):
     def save_chat(self, chat: Chat) -> None: ...
 
     @abstractmethod
+    def fetch_chat(self, chat_id: str) -> Chat: ...
+
+    @abstractmethod
     def fetch_chats(self, limit: int | None = None) -> list[Chat]: ...
 
     @abstractmethod
@@ -29,7 +32,18 @@ class InMemoryChatRepository(ChatRepository):
 
     def save_chat(self, chat: Chat) -> None:
         with self._lock:
+            for i, c in enumerate(self._chats):
+                if c.id == chat.id:
+                    self._chats[i] = chat
+                    return
             self._chats.append(chat)
+
+    def fetch_chat(self, chat_id: str) -> Chat:
+        with self._lock:
+            for c in self._chats:
+                if c.id == chat_id:
+                    return c
+            raise KeyError(chat_id)
 
     def fetch_chats(self, limit: int) -> list[Chat]:
         with self._lock:

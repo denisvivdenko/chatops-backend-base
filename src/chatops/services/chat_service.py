@@ -33,6 +33,9 @@ class ChatService:
             raise LastAssistantMessageIsNotFinished()
 
         now = int(time.time() * 1000)
+        chat = self._repo.fetch_chat(chat_id)
+        self._repo.save_chat(chat.model_copy(update={"last_activity_at": now}))
+
         user_message = Message(
             id=str(uuid.uuid4()),
             role=MessageRole.USER,
