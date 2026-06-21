@@ -87,24 +87,24 @@ def test_delete_chat(client):
     assert all(c["id"] != chat_id for c in chats)
 
 
-# # --- Messages ---
+# --- Messages ---
 
-# def test_fetch_messages_after_create_chat(client):
-#     chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
+def test_fetch_messages_after_create_chat(client):
+    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
 
-#     response = client.get(f"/chats/{chat_id}/messages")
+    response = client.get(f"/chats/{chat_id}/messages")
 
-#     assert response.status_code == 200
-#     messages = response.json()
-#     assert len(messages) == 2
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 2
 
-#     assert messages[0]["role"] == "user"
-#     assert messages[0]["status"] == "complete"
-#     assert messages[0]["content"] == "Hello"
+    assert messages[0]["role"] == "user"
+    assert messages[0]["status"] == "complete"
+    assert messages[0]["content"] == "Hello"
 
-#     assert messages[1]["role"] == "assistant"
-#     assert messages[1]["status"] == "pending"
-#     assert "id" in messages[1]
+    assert messages[1]["role"] == "assistant"
+    assert messages[1]["status"] == "pending"
+    assert "id" in messages[1]
 
 
 # def test_send_message_returns_409_when_assistant_is_pending(client):

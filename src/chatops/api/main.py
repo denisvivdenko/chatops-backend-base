@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
-from chatops.domain.chat import Chat
+from chatops.domain.chat import Chat, Message
 from chatops.services.chat_service import ChatService
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
 from chatops.jobs.job_stream import JobStream, InMemoryJobStream
@@ -31,6 +31,10 @@ def create_app(
     @app.delete("/chats/{chat_id}", status_code=204)
     def delete_chat(chat_id: str) -> None:
         service.delete_chat(chat_id)
+
+    @app.get("/chats/{chat_id}/messages", response_model=list[Message])
+    def fetch_messages(chat_id: str) -> list[Message]:
+        return service.fetch_messages(chat_id)
 
     return app
 
