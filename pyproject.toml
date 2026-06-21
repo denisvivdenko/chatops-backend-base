@@ -7,7 +7,7 @@ name = "chatops"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.137.1",
+    "fastapi[standard]>=0.137.1",
     "httpx2>=2.4.0",
     "pytest>=9.1.0",
     "pytest-asyncio>=1.4.0",

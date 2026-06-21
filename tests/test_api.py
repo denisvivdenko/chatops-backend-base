@@ -148,4 +148,4 @@ def test_stream_assistant_response(client_with_worker):
 
     assert len(events) > 0
     assert [e["seq_id"] for e in events] == list(range(len(events)))
-    assert " ".join(e["token"] for e in events) == HARDCODED_RESPONSE
+    assert "".join(e["token"] for e in events) == HARDCODED_RESPONSE

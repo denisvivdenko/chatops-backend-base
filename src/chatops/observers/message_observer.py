@@ -40,4 +40,4 @@ class MessageObserver:
                     last_id = entry.id
                     seq_id += 1
         except StreamNotFoundError:
-            raise MessageNotObservableError(f"Message {self._message_id} is not observable")
+            raise MessageNotObservableError(f"Message {self._message_id} is not found.")

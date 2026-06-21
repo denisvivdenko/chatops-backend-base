@@ -3,6 +3,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from chatops.domain.chat import Chat, Message
@@ -11,6 +12,7 @@ from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRep
 from chatops.jobs.job_stream import JobStream, InMemoryJobStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.message_observer import MessageObserver
+from chatops.workers.worker import Worker
 
 
 class CreateChatRequest(BaseModel):
@@ -27,7 +29,17 @@ def create_app(
     event_stream: InMemoryEventStream,
 ) -> FastAPI:
     app = FastAPI()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
+    Worker(chat_repository=chat_repository, jobs_stream=job_stream, event_stream=event_stream).start()
 
     @app.get("/chats", response_model=list[Chat])
     def fetch_chats(limit: int = Query(default=10, ge=1)) -> list[Chat]:

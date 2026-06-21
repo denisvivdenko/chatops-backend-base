@@ -79,7 +79,7 @@ async def test_worker_completes_pending_assistant_message() -> None:
     Worker(chat_repository=chat_repository, jobs_stream=job_stream, event_stream=event_stream).start()
 
     events = [e async for e in MessageObserver(chat.id, pending_assistant.id, event_stream)]
-    assert " ".join(e.token for e in events) == HARDCODED_RESPONSE
+    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
 
     messages = service.fetch_messages(chat.id)
     assert messages[1].status == MessageStatus.COMPLETE
@@ -110,7 +110,7 @@ async def test_can_send_next_message_after_assistant_completes() -> None:
     assert messages[-1].status == MessageStatus.PENDING
 
     events = [e async for e in MessageObserver(chat.id, second_assistant.id, event_stream)]
-    assert " ".join(e.token for e in events) == HARDCODED_RESPONSE
+    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
 
     messages = service.fetch_messages(chat.id)
     assert len(messages) == 4

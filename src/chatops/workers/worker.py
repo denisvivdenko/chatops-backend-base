@@ -1,11 +1,38 @@
 import threading
+import time
 
 from chatops.domain.chat import EOM, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.jobs.job_stream import JobStream, AssistantJob
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 
-HARDCODED_RESPONSE = "Hello! I'm an AI assistant. How can I help you?"
+HARDCODED_RESPONSE = """
+## Markdown support
+
+This response demonstrates **bold**, *italic*, and \`inline code\`.
+
+### Lists
+
+- Unordered items work fine
+- As do nested concepts
+
+1. Ordered lists too
+2. With multiple entries
+
+### Code blocks
+
+\`\`\`ts
+function greet(name: string): string {
+  return \`Hello, \${name}!\`;
+}
+\`\`\`
+
+> Blockquotes are also supported for callouts or citations.
+
+---
+
+Let me know what you'd like to explore next.`;
+"""
 
 
 class Worker:
@@ -26,9 +53,10 @@ class Worker:
 
     def _process(self, job: AssistantJob) -> None:
         stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
-        tokens = HARDCODED_RESPONSE.split()
-        for t in tokens:
-            self._event_stream.write(stream_key, {"token": t})
+        chunk_size = 6
+        for i in range(0, len(HARDCODED_RESPONSE), chunk_size):
+            self._event_stream.write(stream_key, {"token": HARDCODED_RESPONSE[i:i + chunk_size]})
+            time.sleep(0.1)
         self._event_stream.write(stream_key, {"token": EOM})
 
         for message in self._repo.fetch_messages(job.chat_id):
