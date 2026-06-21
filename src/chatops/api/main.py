@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from chatops.domain.chat import Chat, Message
-from chatops.services.chat_service import ChatService
+from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
 from chatops.jobs.job_stream import JobStream, InMemoryJobStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
@@ -10,6 +11,10 @@ from chatops.observers.in_memory_event_stream import InMemoryEventStream
 
 class CreateChatRequest(BaseModel):
     message: str
+
+
+class SendMessageRequest(BaseModel):
+    content: str
 
 
 def create_app(
@@ -35,6 +40,13 @@ def create_app(
     @app.get("/chats/{chat_id}/messages", response_model=list[Message])
     def fetch_messages(chat_id: str) -> list[Message]:
         return service.fetch_messages(chat_id)
+
+    @app.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
+    def send_message(chat_id: str, body: SendMessageRequest):
+        try:
+            return service.send_message(chat_id, body.content)
+        except LastAssistantMessageIsNotFinished:
+            return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
 
     return app
 

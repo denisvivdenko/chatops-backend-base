@@ -107,13 +107,13 @@ def test_fetch_messages_after_create_chat(client):
     assert "id" in messages[1]
 
 
-# def test_send_message_returns_409_when_assistant_is_pending(client):
-#     chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
+def test_send_message_returns_409_when_assistant_is_pending(client):
+    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
 
-#     response = client.post(f"/chats/{chat_id}/messages", json={"content": "Follow up"})
+    response = client.post(f"/chats/{chat_id}/messages", json={"content": "Follow up"})
 
-#     assert response.status_code == 409
-#     assert response.json()["error"] == "last_assistant_message_not_finished"
+    assert response.status_code == 409
+    assert response.json()["error"] == "last_assistant_message_not_finished"
 
 
 # def test_send_message_returns_pending_assistant_after_completion(client_with_worker):
