@@ -23,24 +23,8 @@ class ChatService:
             last_activity_at=now,
             created_at=now,
         )
-        user_message = Message(
-            id=str(uuid.uuid4()),
-            role=MessageRole.USER,
-            status=MessageStatus.COMPLETE,
-            content=first_message,
-            created_at=now,
-        )
-        assistant_message = Message(
-            id=str(uuid.uuid4()),
-            role=MessageRole.ASSISTANT,
-            status=MessageStatus.PENDING,
-            content="",
-            created_at=now,
-        )
         self._repo.save_chat(chat)
-        self._repo.save_message(chat.id, user_message)
-        self._repo.save_message(chat.id, assistant_message)
-        self._jobs.publish(AssistantJob(chat_id=chat.id, message_id=assistant_message.id))
+        self.send_message(chat.id, first_message)
         return chat
 
     def send_message(self, chat_id: str, content: str) -> Message:
