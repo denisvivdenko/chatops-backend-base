@@ -67,14 +67,14 @@ def test_list_chats_sorted_most_recent_first(client_with_worker):
     # assert chats[0]["id"] == chat1_id
 
 
-# def test_list_chats_respects_limit(client):
-#     for i in range(3):
-#         client.post("/chats", json={"message": f"Message {i}"})
+def test_list_chats_respects_limit(client):
+    for i in range(3):
+        client.post("/chats", json={"message": f"Message {i}"})
 
-#     response = client.get("/chats?limit=2")
+    response = client.get("/chats?limit=2")
 
-#     assert response.status_code == 200
-#     assert len(response.json()) == 2
+    assert response.status_code == 200
+    assert len(response.json()) == 2
 
 
 # def test_delete_chat(client):
