@@ -1,9 +1,24 @@
 import threading
+from abc import ABC, abstractmethod
 
 from chatops.domain.chat import Chat, Message
 
 
-class ChatRepository:
+class ChatRepository(ABC):
+    @abstractmethod
+    def save_chat(self, chat: Chat) -> None: ...
+
+    @abstractmethod
+    def fetch_chats(self, limit: int) -> list[Chat]: ...
+
+    @abstractmethod
+    def save_message(self, chat_id: str, message: Message) -> None: ...
+
+    @abstractmethod
+    def fetch_messages(self, chat_id: str) -> list[Message]: ...
+
+
+class InMemoryChatRepository(ChatRepository):
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._chats: list[Chat] = []

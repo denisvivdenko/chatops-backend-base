@@ -1,4 +1,5 @@
 import queue
+from abc import ABC, abstractmethod
 from typing import NamedTuple
 
 
@@ -7,7 +8,15 @@ class AssistantJob(NamedTuple):
     message_id: str
 
 
-class JobStream:
+class JobStream(ABC):
+    @abstractmethod
+    def publish(self, job: AssistantJob) -> None: ...
+
+    @abstractmethod
+    def consume(self) -> AssistantJob | None: ...
+
+
+class InMemoryJobStream(JobStream):
     def __init__(self) -> None:
         self._queue: queue.Queue[AssistantJob] = queue.Queue()
 

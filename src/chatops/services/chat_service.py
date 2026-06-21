@@ -2,8 +2,8 @@ import uuid
 import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
-from chatops.repositories.chat_repository import ChatRepository
-from chatops.jobs.job_stream import JobStream, AssistantJob
+from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
+from chatops.jobs.job_stream import JobStream, InMemoryJobStream, AssistantJob
 
 
 class LastAssistantMessageIsNotFinished(Exception):
@@ -12,8 +12,8 @@ class LastAssistantMessageIsNotFinished(Exception):
 
 class ChatService:
     def __init__(self, chat_repository: ChatRepository | None = None, jobs_stream: JobStream | None = None) -> None:
-        self._repo = chat_repository or ChatRepository()
-        self._jobs = jobs_stream or JobStream()
+        self._repo = chat_repository or InMemoryChatRepository()
+        self._jobs = jobs_stream or InMemoryJobStream()
 
     def create_chat(self, first_message: str) -> Chat:
         now = int(time.time() * 1000)

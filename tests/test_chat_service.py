@@ -3,8 +3,8 @@ import pytest
 
 from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 from chatops.domain.chat import MessageRole, MessageStatus
-from chatops.repositories.chat_repository import ChatRepository
-from chatops.jobs.job_stream import JobStream
+from chatops.repositories.chat_repository import InMemoryChatRepository
+from chatops.jobs.job_stream import InMemoryJobStream
 from chatops.workers.worker import Worker, HARDCODED_RESPONSE
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.message_observer import MessageObserver
@@ -29,9 +29,9 @@ def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
 
 @pytest.mark.asyncio
 async def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
-    job_stream = JobStream()
+    job_stream = InMemoryJobStream()
     event_stream = InMemoryEventStream()
-    chat_repository = ChatRepository()
+    chat_repository = InMemoryChatRepository()
 
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
 
