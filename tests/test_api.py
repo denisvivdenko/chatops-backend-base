@@ -77,14 +77,14 @@ def test_list_chats_respects_limit(client):
     assert len(response.json()) == 2
 
 
-# def test_delete_chat(client):
-#     chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
+def test_delete_chat(client):
+    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
 
-#     response = client.delete(f"/chats/{chat_id}")
+    response = client.delete(f"/chats/{chat_id}")
 
-#     assert response.status_code == 204
-#     chats = client.get("/chats?limit=10").json()
-#     assert all(c["id"] != chat_id for c in chats)
+    assert response.status_code == 204
+    chats = client.get("/chats?limit=10").json()
+    assert all(c["id"] != chat_id for c in chats)
 
 
 # # --- Messages ---

@@ -28,6 +28,10 @@ def create_app(
     def create_chat(body: CreateChatRequest) -> Chat:
         return service.create_chat(body.message)
 
+    @app.delete("/chats/{chat_id}", status_code=204)
+    def delete_chat(chat_id: str) -> None:
+        service.delete_chat(chat_id)
+
     return app
 
 
