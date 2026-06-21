@@ -27,6 +27,16 @@ def test_created_chats_appear_on_top_sorted_by_last_activity() -> None:
     assert chats_limited[0].id == second_chat.id
 
 
+def test_delete_chat() -> None:
+    service = ChatService()
+    chat = service.create_chat("First message")
+    chats = service.fetch_chats(limit=10)
+    assert len(chats) == 1
+    service.delete_chat(chat.id)
+    chats = service.fetch_chats(limit=10)
+    assert len(chats) == 0
+
+
 @pytest.mark.asyncio
 async def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     job_stream = InMemoryJobStream()

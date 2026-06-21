@@ -71,5 +71,8 @@ class ChatService:
     def fetch_chats(self, limit: int) -> list[Chat]:
         return self._repo.fetch_chats(limit)
 
+    def delete_chat(self, chat_id: str) -> None:
+        self._repo.delete_chat(chat_id)
+
     def fetch_messages(self, chat_id: str) -> list[Message]:
         return self._repo.fetch_messages(chat_id)

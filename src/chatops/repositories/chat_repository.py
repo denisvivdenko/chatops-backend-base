@@ -9,13 +9,16 @@ class ChatRepository(ABC):
     def save_chat(self, chat: Chat) -> None: ...
 
     @abstractmethod
-    def fetch_chats(self, limit: int) -> list[Chat]: ...
+    def fetch_chats(self, limit: int | None = None) -> list[Chat]: ...
 
     @abstractmethod
     def save_message(self, chat_id: str, message: Message) -> None: ...
 
     @abstractmethod
     def fetch_messages(self, chat_id: str) -> list[Message]: ...
+
+    @abstractmethod
+    def delete_chat(self, chat_id: str) -> None: ...
 
 
 class InMemoryChatRepository(ChatRepository):
@@ -32,6 +35,11 @@ class InMemoryChatRepository(ChatRepository):
         with self._lock:
             sorted_chats = sorted(self._chats, key=lambda c: c.last_activity_at, reverse=True)
             return sorted_chats[:limit]
+
+    def delete_chat(self, chat_id: str) -> None:
+        with self._lock:
+            self._chats = [c for c in self._chats if c.id != chat_id]
+            self._messages.pop(chat_id, None)
 
     def save_message(self, chat_id: str, message: Message) -> None:
         with self._lock:
