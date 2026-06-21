@@ -46,17 +46,25 @@ def test_create_chat(client):
     assert "last_activity_at" in body
 
 
-# def test_list_chats_sorted_most_recent_first(client):
-#     client.post("/chats", json={"message": "First"})
-#     client.post("/chats", json={"message": "Second"})
+def test_list_chats_sorted_most_recent_first(client_with_worker):
+    chat1_id = client_with_worker.post("/chats", json={"message": "First"}).json()["id"]
+    chat2_id = client_with_worker.post("/chats", json={"message": "Second"}).json()["id"]
 
-#     response = client.get("/chats?limit=10")
+    # drain SSE for both so their assistants are complete and we can send follow-ups
+    # for chat_id in [chat1_id, chat2_id]:
+    #     assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+    #     with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+    #         list(resp.iter_lines())
 
-#     assert response.status_code == 200
-#     chats = response.json()
-#     assert len(chats) == 2
-#     assert chats[0]["title"] == "Second"
-#     assert chats[1]["title"] == "First"
+    # chat2 is currently first (created more recently)
+    chats = client_with_worker.get("/chats?limit=10").json()
+    assert chats[0]["id"] == chat2_id
+
+    # sending a message to chat1 (currently last) should bump it to the top
+    # client_with_worker.post(f"/chats/{chat1_id}/messages", json={"content": "Follow up"})
+
+    # chats = client_with_worker.get("/chats?limit=10").json()
+    # assert chats[0]["id"] == chat1_id
 
 
 # def test_list_chats_respects_limit(client):
