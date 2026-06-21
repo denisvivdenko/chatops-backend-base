@@ -132,20 +132,20 @@ def test_send_message_returns_pending_assistant_after_completion(client_with_wor
     assert assistant["status"] == "pending"
 
 
-# # --- SSE streaming ---
+# --- SSE streaming ---
 
-# def test_stream_assistant_response(client_with_worker):
-#     chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
-#     pending_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+def test_stream_assistant_response(client_with_worker):
+    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
+    pending_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
 
-#     events = []
-#     with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{pending_assistant_id}/stream") as response:
-#         assert response.status_code == 200
-#         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
-#         for line in response.iter_lines():
-#             if line.startswith("data: "):
-#                 events.append(json.loads(line[6:]))
+    events = []
+    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{pending_assistant_id}/stream") as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+        for line in response.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
 
-#     assert len(events) > 0
-#     assert [e["seq_id"] for e in events] == list(range(len(events)))
-#     assert " ".join(e["token"] for e in events) == HARDCODED_RESPONSE
+    assert len(events) > 0
+    assert [e["seq_id"] for e in events] == list(range(len(events)))
+    assert " ".join(e["token"] for e in events) == HARDCODED_RESPONSE

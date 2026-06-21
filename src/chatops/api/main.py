@@ -1,5 +1,8 @@
+import json
+from typing import AsyncIterator
+
 from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from chatops.domain.chat import Chat, Message
@@ -7,6 +10,7 @@ from chatops.services.chat_service import ChatService, LastAssistantMessageIsNot
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
 from chatops.jobs.job_stream import JobStream, InMemoryJobStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.observers.message_observer import MessageObserver
 
 
 class CreateChatRequest(BaseModel):
@@ -47,6 +51,14 @@ def create_app(
             return service.send_message(chat_id, body.content)
         except LastAssistantMessageIsNotFinished:
             return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
+
+    @app.get("/chats/{chat_id}/messages/{message_id}/stream")
+    def stream_message(chat_id: str, message_id: str) -> StreamingResponse:
+        async def event_generator() -> AsyncIterator[str]:
+            async for event in MessageObserver(chat_id, message_id, event_stream):
+                yield f"data: {json.dumps(event.model_dump())}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return app
 
