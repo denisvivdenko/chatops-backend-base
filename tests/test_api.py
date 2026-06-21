@@ -116,20 +116,20 @@ def test_send_message_returns_409_when_assistant_is_pending(client):
     assert response.json()["error"] == "last_assistant_message_not_finished"
 
 
-# def test_send_message_returns_pending_assistant_after_completion(client_with_worker):
-#     chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
-#     first_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+def test_send_message_returns_pending_assistant_after_completion(client_with_worker):
+    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
+    first_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
 
-#     # consuming the SSE stream blocks until the worker finishes the first response
-#     with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
-#         list(resp.iter_lines())
+    # consuming the SSE stream blocks until the worker finishes the first response
+    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
+        list(resp.iter_lines())
 
-#     response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
+    response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
 
-#     assert response.status_code == 201
-#     assistant = response.json()
-#     assert assistant["role"] == "assistant"
-#     assert assistant["status"] == "pending"
+    assert response.status_code == 201
+    assistant = response.json()
+    assert assistant["role"] == "assistant"
+    assert assistant["status"] == "pending"
 
 
 # # --- SSE streaming ---
