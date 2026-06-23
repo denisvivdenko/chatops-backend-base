@@ -149,3 +149,34 @@ def test_stream_assistant_response(client_with_worker):
     assert len(events) > 0
     assert [e["seq_id"] for e in events] == list(range(len(events)))
     assert "".join(e["token"] for e in events) == HARDCODED_RESPONSE
+
+
+def test_second_sse_connection_replays_full_response(client_with_worker):
+    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+
+    first_events = []
+    second_events = []
+
+    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as first_resp:
+        first_iter = first_resp.iter_lines()
+
+        collected = 0
+        for line in first_iter:
+            if line.startswith("data: "):
+                first_events.append(json.loads(line[6:]))
+                collected += 1
+                if collected >= 3:
+                    break
+
+        with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as second_resp:
+            for line in second_resp.iter_lines():
+                if line.startswith("data: "):
+                    second_events.append(json.loads(line[6:]))
+
+        for line in first_iter:
+            if line.startswith("data: "):
+                first_events.append(json.loads(line[6:]))
+
+    assert "".join(e["token"] for e in first_events) == HARDCODED_RESPONSE
+    assert "".join(e["token"] for e in second_events) == HARDCODED_RESPONSE
