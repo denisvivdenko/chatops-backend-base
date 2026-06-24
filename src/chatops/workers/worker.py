@@ -41,9 +41,10 @@ class Worker:
         self._jobs = jobs_stream
         self._event_stream = event_stream
 
-    def start(self) -> None:
+    def start(self) -> threading.Thread:
         thread = threading.Thread(target=self._run, daemon=True)
         thread.start()
+        return thread
 
     def _run(self) -> None:
         while True:
@@ -64,3 +65,16 @@ class Worker:
                 updated = message.model_copy(update={"status": MessageStatus.COMPLETE, "content": HARDCODED_RESPONSE})
                 self._repo.save_message(job.chat_id, updated)
                 return
+
+
+if __name__ == "__main__":
+    from chatops.repositories.chat_repository import InMemoryChatRepository
+    from chatops.jobs.job_stream import InMemoryJobStream
+    from chatops.observers.in_memory_event_stream import InMemoryEventStream
+
+    thread = Worker(
+        chat_repository=InMemoryChatRepository(),
+        jobs_stream=InMemoryJobStream(),
+        event_stream=InMemoryEventStream(),
+    ).start()
+    thread.join()
