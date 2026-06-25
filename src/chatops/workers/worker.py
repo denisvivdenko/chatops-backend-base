@@ -57,6 +57,10 @@ class Worker:
         if self._thread:
             self._thread.join()
 
+    def join(self) -> None:
+        if self._thread:
+            self._thread.join()
+
     def _run(self) -> None:
         logger.info("Worker started, waiting for jobs")
         while not self._stop.is_set():
