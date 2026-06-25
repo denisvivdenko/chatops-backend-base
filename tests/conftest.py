@@ -8,6 +8,7 @@ from chatops.api.main import create_app
 from chatops.jobs.job_stream import InMemoryJobStream, RedisJobStream, REDIS_JOBS_KEY
 from chatops.jobs.result_stream import InMemoryResultStream, RedisResultStream, REDIS_RESULTS_KEY
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.observers.redis_event_stream import RedisEventStream
 from chatops.repositories.chat_repository import InMemoryChatRepository
 from chatops.workers.worker import Worker
 
@@ -44,14 +45,14 @@ def infra(request):
 
     redis_host = os.environ.get("REDIS_HOST", "localhost")
     client = redis_lib.Redis(host=redis_host, port=6379, db=1)
-    client.delete(REDIS_JOBS_KEY, REDIS_RESULTS_KEY)
+    client.flushdb()
     yield dict(
         chat_repository=InMemoryChatRepository(),
         job_stream=RedisJobStream(client),
         result_stream=RedisResultStream(client),
-        event_stream=InMemoryEventStream(),
+        event_stream=RedisEventStream(client),
     )
-    client.delete(REDIS_JOBS_KEY, REDIS_RESULTS_KEY)
+    client.flushdb()
     client.close()
 
 

@@ -17,6 +17,10 @@ class EventStream(ABC):
         return f"{chat_id}:{message_id}"
 
     @abstractmethod
-    async def read(self, stream_key: str, last_id: str | None = None) -> list[StreamEntry]:
+    def write(self, stream_key: str, data: dict[str, str]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def read(self, stream_key: str, last_id: str = "0") -> list[StreamEntry]:
         """Raises StreamNotFoundError if the stream does not exist."""
         raise NotImplementedError

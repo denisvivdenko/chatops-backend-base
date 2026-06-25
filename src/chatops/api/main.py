@@ -17,7 +17,8 @@ from chatops.services.chat_service import ChatService, LastAssistantMessageIsNot
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
 from chatops.jobs.job_stream import JobStream, RedisJobStream
 from chatops.jobs.result_stream import ResultStream, RedisResultStream
-from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.observers.event_stream import EventStream
+from chatops.observers.redis_event_stream import RedisEventStream
 from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
 from chatops.consumers.result_consumer import ResultConsumer
 
@@ -34,7 +35,7 @@ def create_app(
     chat_repository: ChatRepository,
     job_stream: JobStream,
     result_stream: ResultStream,
-    event_stream: InMemoryEventStream,
+    event_stream: EventStream,
 ) -> FastAPI:
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
 
@@ -102,6 +103,6 @@ if __name__ == "__main__":
         chat_repository=InMemoryChatRepository(),
         job_stream=RedisJobStream(redis_client),
         result_stream=RedisResultStream(redis_client),
-        event_stream=InMemoryEventStream(),
+        event_stream=RedisEventStream(redis_client),
     )
     uvicorn.run(app, host="0.0.0.0", port=8000)

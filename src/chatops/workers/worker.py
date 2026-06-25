@@ -5,7 +5,7 @@ import time
 from chatops.domain.chat import EOM
 from chatops.jobs.job_stream import JobStream, AssistantJob, ConsumeTimeout
 from chatops.jobs.result_stream import ResultStream, JobResult
-from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.observers.event_stream import EventStream
 
 HARDCODED_RESPONSE = """
 ## Markdown support
@@ -33,14 +33,14 @@ function greet(name: string): string {
 ---
 
 Let me know what you'd like to explore next.`;
-"""[:10]
+""" # [:10]
 
 
 logger = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, jobs_stream: JobStream, result_stream: ResultStream, event_stream: InMemoryEventStream) -> None:
+    def __init__(self, jobs_stream: JobStream, result_stream: ResultStream, event_stream: EventStream) -> None:
         self._jobs = jobs_stream
         self._results = result_stream
         self._event_stream = event_stream
@@ -87,12 +87,12 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     from chatops.jobs.job_stream import RedisJobStream
     from chatops.jobs.result_stream import RedisResultStream
+    from chatops.observers.redis_event_stream import RedisEventStream
 
     redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
 
-    thread = Worker(
+    Worker(
         jobs_stream=RedisJobStream(redis_client),
         result_stream=RedisResultStream(redis_client),
-        event_stream=InMemoryEventStream(),
-    ).start()
-    thread.join()
+        event_stream=RedisEventStream(redis_client),
+    ).start().join()

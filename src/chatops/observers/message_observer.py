@@ -27,7 +27,7 @@ class MessageObserver:
 
     async def _iterate(self) -> AsyncIterator[MessageStreamEvent]:
         stream_key = self._stream.stream_key(self._chat_id, self._message_id)
-        last_id = None
+        last_id = "0"
         seq_id = 0
         try:
             while True:

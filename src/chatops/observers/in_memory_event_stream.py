@@ -14,9 +14,9 @@ class InMemoryEventStream(EventStream):
     def write(self, stream_key: str, data: dict[str, str]) -> None:
         with self._lock:
             entries = self._entries.setdefault(stream_key, [])
-            entries.append(StreamEntry(id=str(len(entries)), data=data))
+            entries.append(StreamEntry(id=str(len(entries) + 1), data=data))
 
-    async def read(self, stream_key: str, last_id: str | None = None) -> list[StreamEntry]:
+    async def read(self, stream_key: str, last_id: str = "0") -> list[StreamEntry]:
         deadline = time.monotonic() + self._timeout
         while True:
             with self._lock:
@@ -29,8 +29,8 @@ class InMemoryEventStream(EventStream):
 
             await asyncio.sleep(0.05)
 
-    def _entries_since(self, entries: list[StreamEntry], last_id: str | None) -> list[StreamEntry]:
-        if last_id is None:
+    def _entries_since(self, entries: list[StreamEntry], last_id: str) -> list[StreamEntry]:
+        if last_id == "0":
             return list(entries)
         for i, entry in enumerate(entries):
             if entry.id == last_id:
