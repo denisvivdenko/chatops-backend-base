@@ -1,38 +1,7 @@
 import json
 import pytest
-from fastapi.testclient import TestClient
 
-from chatops.api.main import create_app
-from chatops.repositories.chat_repository import InMemoryChatRepository
-from chatops.jobs.job_stream import InMemoryJobStream
-from chatops.jobs.result_stream import InMemoryResultStream
-from chatops.observers.in_memory_event_stream import InMemoryEventStream
-from chatops.workers.worker import Worker, HARDCODED_RESPONSE
-
-
-@pytest.fixture
-def infra():
-    return dict(
-        chat_repository=InMemoryChatRepository(),
-        job_stream=InMemoryJobStream(),
-        result_stream=InMemoryResultStream(),
-        event_stream=InMemoryEventStream(),
-    )
-
-
-@pytest.fixture
-def client(infra):
-    return TestClient(create_app(**infra))
-
-
-@pytest.fixture
-def client_with_worker(infra):
-    Worker(
-        jobs_stream=infra["job_stream"],
-        result_stream=infra["result_stream"],
-        event_stream=infra["event_stream"],
-    ).start()
-    return TestClient(create_app(**infra))
+from chatops.workers.worker import HARDCODED_RESPONSE
 
 
 # --- Chats ---

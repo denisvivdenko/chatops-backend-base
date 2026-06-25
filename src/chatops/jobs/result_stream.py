@@ -5,6 +5,8 @@ from typing import NamedTuple
 
 import redis
 
+from chatops.jobs.job_stream import ConsumeTimeout
+
 
 class JobResult(NamedTuple):
     chat_id: str
@@ -28,7 +30,10 @@ class InMemoryResultStream(ResultStream):
         self._queue.put(result)
 
     def consume(self) -> JobResult:
-        return self._queue.get(block=True)
+        try:
+            return self._queue.get(timeout=1)
+        except queue.Empty:
+            raise ConsumeTimeout()
 
 
 REDIS_RESULTS_KEY = "results"
@@ -42,5 +47,8 @@ class RedisResultStream(ResultStream):
         self._client.lpush(REDIS_RESULTS_KEY, json.dumps(result._asdict()))
 
     def consume(self) -> JobResult:
-        _, value = self._client.brpop(REDIS_RESULTS_KEY, timeout=0)
+        result = self._client.brpop(REDIS_RESULTS_KEY, timeout=1)
+        if result is None:
+            raise ConsumeTimeout()
+        _, value = result
         return JobResult(**json.loads(value))

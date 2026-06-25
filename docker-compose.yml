@@ -1,5 +1,6 @@
 services:
   api:
+    profiles: [deploy]
     build: .
     command: python -m chatops.api.main
     ports:
@@ -7,15 +8,36 @@ services:
     environment:
       REDIS_HOST: redis
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   worker:
+    profiles: [deploy]
     build: .
     command: python -m chatops.workers.worker
     environment:
       REDIS_HOST: redis
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   redis:
+    profiles: [deploy, tests]
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 10
+
+  tests:
+    profiles: [tests]
+    build: .
+    command: pytest tests/ --integration -v
+    volumes:
+      - ./tests:/app/tests
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy

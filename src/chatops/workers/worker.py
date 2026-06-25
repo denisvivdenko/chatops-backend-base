@@ -3,7 +3,7 @@ import threading
 import time
 
 from chatops.domain.chat import EOM
-from chatops.jobs.job_stream import JobStream, AssistantJob
+from chatops.jobs.job_stream import JobStream, AssistantJob, ConsumeTimeout
 from chatops.jobs.result_stream import ResultStream, JobResult
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 
@@ -44,16 +44,26 @@ class Worker:
         self._jobs = jobs_stream
         self._results = result_stream
         self._event_stream = event_stream
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
 
-    def start(self) -> threading.Thread:
-        thread = threading.Thread(target=self._run, daemon=True)
-        thread.start()
-        return thread
+    def start(self) -> "Worker":
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join()
 
     def _run(self) -> None:
         logger.info("Worker started, waiting for jobs")
-        while True:
-            self._process(self._jobs.consume())
+        while not self._stop.is_set():
+            try:
+                self._process(self._jobs.consume())
+            except ConsumeTimeout:
+                pass
 
     def _process(self, job: AssistantJob) -> None:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)

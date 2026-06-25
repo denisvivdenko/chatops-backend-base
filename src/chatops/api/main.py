@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,7 +36,15 @@ def create_app(
     result_stream: ResultStream,
     event_stream: InMemoryEventStream,
 ) -> FastAPI:
-    app = FastAPI()
+    service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        consumer = ResultConsumer(result_stream=result_stream, chat_service=service).start()
+        yield
+        consumer.stop()
+
+    app = FastAPI(lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -44,9 +53,6 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
-    ResultConsumer(result_stream=result_stream, chat_service=service).start()
 
     @app.get("/chats", response_model=list[Chat])
     def fetch_chats(limit: int = Query(default=10, ge=1)) -> list[Chat]:
