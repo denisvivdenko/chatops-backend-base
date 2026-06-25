@@ -1,6 +1,11 @@
 import json
+import logging
+import os
 from typing import AsyncIterator
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+import redis
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +14,11 @@ from pydantic import BaseModel
 from chatops.domain.chat import Chat, Message
 from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
-from chatops.jobs.job_stream import JobStream, InMemoryJobStream
+from chatops.jobs.job_stream import JobStream, RedisJobStream
+from chatops.jobs.result_stream import ResultStream, RedisResultStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
-from chatops.observers.message_observer import MessageObserver
-from chatops.workers.worker import Worker
+from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
+from chatops.consumers.result_consumer import ResultConsumer
 
 
 class CreateChatRequest(BaseModel):
@@ -26,6 +32,7 @@ class SendMessageRequest(BaseModel):
 def create_app(
     chat_repository: ChatRepository,
     job_stream: JobStream,
+    result_stream: ResultStream,
     event_stream: InMemoryEventStream,
 ) -> FastAPI:
     app = FastAPI()
@@ -39,7 +46,7 @@ def create_app(
     )
 
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
-    Worker(chat_repository=chat_repository, jobs_stream=job_stream, event_stream=event_stream).start()
+    ResultConsumer(result_stream=result_stream, chat_repository=chat_repository).start()
 
     @app.get("/chats", response_model=list[Chat])
     def fetch_chats(limit: int = Query(default=10, ge=1)) -> list[Chat]:
@@ -67,16 +74,22 @@ def create_app(
     @app.get("/chats/{chat_id}/messages/{message_id}/stream")
     def stream_message(chat_id: str, message_id: str) -> StreamingResponse:
         async def event_generator() -> AsyncIterator[str]:
-            async for event in MessageObserver(chat_id, message_id, event_stream):
-                yield f"data: {json.dumps(event.model_dump())}\n\n"
+            try:
+                async for event in MessageObserver(chat_id, message_id, event_stream):
+                    yield f"data: {json.dumps(event.model_dump())}\n\n"
+            except MessageNotObservableError:
+                return
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return app
 
 
+redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
+
 app = create_app(
     chat_repository=InMemoryChatRepository(),
-    job_stream=InMemoryJobStream(),
+    job_stream=RedisJobStream(redis_client),
+    result_stream=RedisResultStream(redis_client),
     event_stream=InMemoryEventStream(),
 )
