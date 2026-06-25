@@ -140,49 +140,34 @@ def test_send_message_returns_pending_assistant_after_completion(client_with_wor
 
 # --- SSE streaming ---
 
-def test_stream_assistant_response(client_with_worker):
-    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
-    pending_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
 
-    events = []
-    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{pending_assistant_id}/stream") as response:
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
-        for line in response.iter_lines():
+def test_stream_assistant_response(client_with_worker):
+
+    def _collect_events(lines, limit=None):
+        events = []
+        for line in lines:
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
+                if limit and len(events) >= limit:
+                    break
+        return events
 
-    assert len(events) > 0
-    assert [e["seq_id"] for e in events] == list(range(len(events)))
-    assert "".join(e["token"] for e in events) == HARDCODED_RESPONSE
-
-
-def test_second_sse_connection_replays_full_response(client_with_worker):
     chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
     assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+    url = f"/chats/{chat_id}/messages/{assistant_id}/stream"
 
-    first_events = []
-    second_events = []
-
-    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as first_resp:
+    with client_with_worker.stream("GET", url) as first_resp:
+        assert first_resp.status_code == 200
+        assert first_resp.headers["content-type"] == "text/event-stream; charset=utf-8"
         first_iter = first_resp.iter_lines()
 
-        collected = 0
-        for line in first_iter:
-            if line.startswith("data: "):
-                first_events.append(json.loads(line[6:]))
-                collected += 1
-                if collected >= 3:
-                    break
+        first_events = _collect_events(first_iter, limit=3)
 
-        with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as second_resp:
-            for line in second_resp.iter_lines():
-                if line.startswith("data: "):
-                    second_events.append(json.loads(line[6:]))
+        with client_with_worker.stream("GET", url) as second_resp:
+            second_events = _collect_events(second_resp.iter_lines())
 
-        for line in first_iter:
-            if line.startswith("data: "):
-                first_events.append(json.loads(line[6:]))
+        first_events += _collect_events(first_iter)
 
+    assert [e["seq_id"] for e in first_events] == list(range(len(first_events)))
     assert "".join(e["token"] for e in first_events) == HARDCODED_RESPONSE
     assert "".join(e["token"] for e in second_events) == HARDCODED_RESPONSE
