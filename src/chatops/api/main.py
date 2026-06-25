@@ -46,7 +46,7 @@ def create_app(
     )
 
     service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
-    ResultConsumer(result_stream=result_stream, chat_repository=chat_repository).start()
+    ResultConsumer(result_stream=result_stream, chat_service=service).start()
 
     @app.get("/chats", response_model=list[Chat])
     def fetch_chats(limit: int = Query(default=10, ge=1)) -> list[Chat]:
