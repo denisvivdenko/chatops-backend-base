@@ -13,7 +13,7 @@ class JobStream(ABC):
     def publish(self, job: AssistantJob) -> None: ...
 
     @abstractmethod
-    def consume(self) -> AssistantJob | None: ...
+    def consume(self) -> AssistantJob: ...
 
 
 class InMemoryJobStream(JobStream):
@@ -23,8 +23,5 @@ class InMemoryJobStream(JobStream):
     def publish(self, job: AssistantJob) -> None:
         self._queue.put(job)
 
-    def consume(self) -> AssistantJob | None:
-        try:
-            return self._queue.get(block=True, timeout=0.1)
-        except queue.Empty:
-            return None
+    def consume(self) -> AssistantJob:
+        return self._queue.get(block=True)

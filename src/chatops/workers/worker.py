@@ -48,9 +48,7 @@ class Worker:
 
     def _run(self) -> None:
         while True:
-            job = self._jobs.consume()
-            if job is not None:
-                self._process(job)
+            self._process(self._jobs.consume())
 
     def _process(self, job: AssistantJob) -> None:
         stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
