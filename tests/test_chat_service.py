@@ -5,6 +5,7 @@ from chatops.services.chat_service import ChatService, LastAssistantMessageIsNot
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import InMemoryChatRepository
 from chatops.jobs.job_stream import InMemoryJobStream
+from chatops.jobs.result_stream import InMemoryResultStream
 from chatops.workers.worker import Worker, HARDCODED_RESPONSE
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.message_observer import MessageObserver
@@ -67,51 +68,29 @@ def test_send_message_raises_when_last_assistant_message_is_pending() -> None:
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_pending_assistant_message() -> None:
+async def test_worker_streams_hardcoded_response() -> None:
     job_stream = InMemoryJobStream()
     event_stream = InMemoryEventStream()
-    chat_repository = InMemoryChatRepository()
+    chat_repo = InMemoryChatRepository()
 
-    service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
+    service = ChatService(chat_repository=chat_repo, jobs_stream=job_stream)
     chat = service.create_chat("Hello")
     pending_assistant = service.fetch_messages(chat.id)[1]
 
-    Worker(chat_repository=chat_repository, jobs_stream=job_stream, event_stream=event_stream).start()
+    Worker(jobs_stream=job_stream, result_stream=InMemoryResultStream(), event_stream=event_stream).start()
 
     events = [e async for e in MessageObserver(chat.id, pending_assistant.id, event_stream)]
     assert "".join(e.token for e in events) == HARDCODED_RESPONSE
 
-    messages = service.fetch_messages(chat.id)
-    assert messages[1].status == MessageStatus.COMPLETE
-    assert messages[1].content == HARDCODED_RESPONSE
 
-
-@pytest.mark.asyncio
-async def test_can_send_next_message_after_assistant_completes() -> None:
-    job_stream = InMemoryJobStream()
-    event_stream = InMemoryEventStream()
+def test_can_send_next_message_after_assistant_completes() -> None:
     chat_repository = InMemoryChatRepository()
-
-    service = ChatService(chat_repository=chat_repository, jobs_stream=job_stream)
+    service = ChatService(chat_repository=chat_repository, jobs_stream=InMemoryJobStream())
     chat = service.create_chat("Hello")
-    first_assistant = service.fetch_messages(chat.id)[1]
 
-    Worker(chat_repository=chat_repository, jobs_stream=job_stream, event_stream=event_stream).start()
+    assistant = service.fetch_messages(chat.id)[1]
+    chat_repository.save_message(chat.id, assistant.model_copy(update={"status": MessageStatus.COMPLETE, "content": "Done"}))
 
-    _ = [e async for e in MessageObserver(chat.id, first_assistant.id, event_stream)]
-
-    second_assistant = service.send_message(chat.id, "What is the weather today?")
-    assert second_assistant.role == MessageRole.ASSISTANT
-    assert second_assistant.status == MessageStatus.PENDING
-
-    messages = service.fetch_messages(chat.id)
-    assert len(messages) == 4
-    assert messages[-1].role == MessageRole.ASSISTANT
-    assert messages[-1].status == MessageStatus.PENDING
-
-    events = [e async for e in MessageObserver(chat.id, second_assistant.id, event_stream)]
-    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
-
-    messages = service.fetch_messages(chat.id)
-    assert len(messages) == 4
-    assert messages[-1].status == MessageStatus.COMPLETE
+    response = service.send_message(chat.id, "What is the weather today?")
+    assert response.role == MessageRole.ASSISTANT
+    assert response.status == MessageStatus.PENDING

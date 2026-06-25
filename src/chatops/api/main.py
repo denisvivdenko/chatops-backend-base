@@ -85,11 +85,14 @@ def create_app(
     return app
 
 
-redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
+if __name__ == "__main__":
+    import uvicorn
 
-app = create_app(
-    chat_repository=InMemoryChatRepository(),
-    job_stream=RedisJobStream(redis_client),
-    result_stream=RedisResultStream(redis_client),
-    event_stream=InMemoryEventStream(),
-)
+    redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
+    app = create_app(
+        chat_repository=InMemoryChatRepository(),
+        job_stream=RedisJobStream(redis_client),
+        result_stream=RedisResultStream(redis_client),
+        event_stream=InMemoryEventStream(),
+    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
