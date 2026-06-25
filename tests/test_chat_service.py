@@ -11,27 +11,18 @@ from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.message_observer import MessageObserver
 
 
-def test_fetch_chats_sorted_by_most_recent_first() -> None:
+def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit() -> None:
     service = ChatService(chat_repository=InMemoryChatRepository(), jobs_stream=InMemoryJobStream())
-
     first_chat = service.create_chat("First message")
-    time.sleep(1)
+    time.sleep(0.01)
     second_chat = service.create_chat("Second message")
-
-    chats = service.fetch_chats(limit=10)
-    assert len(chats) == 2
-    assert chats[0].id == second_chat.id
-    assert chats[1].id == first_chat.id
-
-
-def test_fetch_chats_respects_limit() -> None:
-    service = ChatService(chat_repository=InMemoryChatRepository(), jobs_stream=InMemoryJobStream())
-    service.create_chat("First message")
-    service.create_chat("Second message")
-    service.create_chat("Third message")
+    time.sleep(0.01)
+    third_chat = service.create_chat("Third message")
 
     chats = service.fetch_chats(limit=2)
     assert len(chats) == 2
+    assert chats[0].id == third_chat.id
+    assert chats[1].id == second_chat.id
 
 
 def test_delete_chat() -> None:
@@ -42,7 +33,7 @@ def test_delete_chat() -> None:
     assert len(service.fetch_chats(limit=10)) == 0
 
 
-def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
+def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up() -> None:
     service = ChatService(chat_repository=InMemoryChatRepository(), jobs_stream=InMemoryJobStream())
     chat = service.create_chat("Hello")
     messages = service.fetch_messages(chat.id)
@@ -57,11 +48,6 @@ def test_create_chat_produces_user_and_pending_assistant_messages() -> None:
     assistant_message = messages[1]
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
-
-
-def test_send_message_raises_when_last_assistant_message_is_pending() -> None:
-    service = ChatService(chat_repository=InMemoryChatRepository(), jobs_stream=InMemoryJobStream())
-    chat = service.create_chat("Hello")
 
     with pytest.raises(LastAssistantMessageIsNotFinished):
         service.send_message(chat.id, "What is the weather today?")
