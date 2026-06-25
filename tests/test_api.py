@@ -126,6 +126,10 @@ def test_send_message_returns_pending_assistant_after_completion(client_with_wor
     with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
         list(resp.iter_lines())
 
+    messages = client_with_worker.get(f"/chats/{chat_id}/messages").json()
+    assert messages[1]["status"] == "complete"
+    assert messages[1]["content"] == HARDCODED_RESPONSE
+
     response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
 
     assert response.status_code == 201

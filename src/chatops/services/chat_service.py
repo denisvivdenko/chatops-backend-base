@@ -55,6 +55,15 @@ class ChatService:
         self._jobs.publish(AssistantJob(chat_id=chat_id, message_id=assistant_message.id))
         return assistant_message
 
+    def complete_message(self, chat_id: str, message_id: str, content: str) -> None:
+        for message in self._repo.fetch_messages(chat_id):
+            if message.id == message_id:
+                self._repo.save_message(
+                    chat_id,
+                    message.model_copy(update={"status": MessageStatus.COMPLETE, "content": content}),
+                )
+                return
+
     def fetch_chats(self, limit: int) -> list[Chat]:
         return self._repo.fetch_chats(limit)
 

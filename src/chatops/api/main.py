@@ -74,11 +74,14 @@ def create_app(
     @app.get("/chats/{chat_id}/messages/{message_id}/stream")
     def stream_message(chat_id: str, message_id: str) -> StreamingResponse:
         async def event_generator() -> AsyncIterator[str]:
+            tokens = []
             try:
                 async for event in MessageObserver(chat_id, message_id, event_stream):
+                    tokens.append(event.token)
                     yield f"data: {json.dumps(event.model_dump())}\n\n"
             except MessageNotObservableError:
                 return
+            service.complete_message(chat_id, message_id, "".join(tokens))
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
