@@ -109,20 +109,14 @@ def test_fetch_messages_after_create_chat(client):
     assert "id" in messages[1]
 
 
-def test_send_message_returns_409_when_assistant_is_pending(client):
-    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
-
-    response = client.post(f"/chats/{chat_id}/messages", json={"content": "Follow up"})
-
-    assert response.status_code == 409
-    assert response.json()["error"] == "last_assistant_message_not_finished"
-
-
-def test_send_message_returns_pending_assistant_after_completion(client_with_worker):
+def test_send_message_lifecycle(client_with_worker):
     chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
     first_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
 
-    # consuming the SSE stream blocks until the worker finishes the first response
+    pending_response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "Follow up"})
+    assert pending_response.status_code == 409
+    assert pending_response.json()["error"] == "last_assistant_message_not_finished"
+
     with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
         list(resp.iter_lines())
 
@@ -130,12 +124,10 @@ def test_send_message_returns_pending_assistant_after_completion(client_with_wor
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == HARDCODED_RESPONSE
 
-    response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
-
-    assert response.status_code == 201
-    assistant = response.json()
-    assert assistant["role"] == "assistant"
-    assert assistant["status"] == "pending"
+    follow_up = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
+    assert follow_up.status_code == 201
+    assert follow_up.json()["role"] == "assistant"
+    assert follow_up.json()["status"] == "pending"
 
 
 # --- SSE streaming ---
