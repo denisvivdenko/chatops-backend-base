@@ -33,7 +33,7 @@ function greet(name: string): string {
 ---
 
 Let me know what you'd like to explore next.`;
-""" # [:10]
+"""[:15]
 
 
 logger = logging.getLogger(__name__)

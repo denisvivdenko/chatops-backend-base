@@ -32,6 +32,7 @@ services:
 
   tests:
     profiles: [tests]
+    image: ${APP_IMAGE:-chatops-backend:local}
     build: .
     command: pytest tests/ --integration -v
     volumes:
