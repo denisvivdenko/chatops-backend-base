@@ -7,7 +7,7 @@ from typing import AsyncIterator
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 import redis
-from fastapi import FastAPI, Query
+from fastapi import APIRouter, FastAPI, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -55,30 +55,32 @@ def create_app(
         allow_headers=["*"],
     )
 
-    @app.get("/chats", response_model=list[Chat])
+    router = APIRouter(prefix="/api")
+
+    @router.get("/chats", response_model=list[Chat])
     def fetch_chats(limit: int = Query(default=10, ge=1)) -> list[Chat]:
         return service.fetch_chats(limit=limit)
 
-    @app.post("/chats", status_code=201, response_model=Chat)
+    @router.post("/chats", status_code=201, response_model=Chat)
     def create_chat(body: CreateChatRequest) -> Chat:
         return service.create_chat(body.message)
 
-    @app.delete("/chats/{chat_id}", status_code=204)
+    @router.delete("/chats/{chat_id}", status_code=204)
     def delete_chat(chat_id: str) -> None:
         service.delete_chat(chat_id)
 
-    @app.get("/chats/{chat_id}/messages", response_model=list[Message])
+    @router.get("/chats/{chat_id}/messages", response_model=list[Message])
     def fetch_messages(chat_id: str) -> list[Message]:
         return service.fetch_messages(chat_id)
 
-    @app.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
+    @router.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
     def send_message(chat_id: str, body: SendMessageRequest):
         try:
             return service.send_message(chat_id, body.content)
         except LastAssistantMessageIsNotFinished:
             return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
 
-    @app.get("/chats/{chat_id}/messages/{message_id}/stream")
+    @router.get("/chats/{chat_id}/messages/{message_id}/stream")
     def stream_message(chat_id: str, message_id: str) -> StreamingResponse:
         async def event_generator() -> AsyncIterator[str]:
             tokens = []
@@ -91,6 +93,8 @@ def create_app(
             service.complete_message(chat_id, message_id, "".join(tokens))
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    app.include_router(router)
 
     return app
 

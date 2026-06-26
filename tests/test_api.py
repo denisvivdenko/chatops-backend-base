@@ -7,7 +7,7 @@ from chatops.workers.worker import HARDCODED_RESPONSE
 # --- Chats ---
 
 def test_create_chat(client):
-    response = client.post("/chats", json={"message": "Hello"})
+    response = client.post("/api/chats", json={"message": "Hello"})
 
     assert response.status_code == 201
     body = response.json()
@@ -18,52 +18,52 @@ def test_create_chat(client):
 
 
 def test_list_chats_sorted_most_recent_first(client_with_worker):
-    chat1_id = client_with_worker.post("/chats", json={"message": "First"}).json()["id"]
-    chat2_id = client_with_worker.post("/chats", json={"message": "Second"}).json()["id"]
+    chat1_id = client_with_worker.post("/api/chats", json={"message": "First"}).json()["id"]
+    chat2_id = client_with_worker.post("/api/chats", json={"message": "Second"}).json()["id"]
 
     # drain SSE for both so their assistants are complete and we can send follow-ups
     for chat_id in [chat1_id, chat2_id]:
-        assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
-        with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+        assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+        with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
             list(resp.iter_lines())
 
     # chat2 is currently first (created more recently)
-    chats = client_with_worker.get("/chats?limit=10").json()
+    chats = client_with_worker.get("/api/chats?limit=10").json()
     assert chats[0]["id"] == chat2_id
 
     # sending a message to chat1 (currently last) should bump it to the top
-    client_with_worker.post(f"/chats/{chat1_id}/messages", json={"content": "Follow up"})
+    client_with_worker.post(f"/api/chats/{chat1_id}/messages", json={"content": "Follow up"})
 
-    chats = client_with_worker.get("/chats?limit=10").json()
+    chats = client_with_worker.get("/api/chats?limit=10").json()
     assert chats[0]["id"] == chat1_id
 
 
 def test_list_chats_respects_limit(client):
     for i in range(3):
-        client.post("/chats", json={"message": f"Message {i}"})
+        client.post("/api/chats", json={"message": f"Message {i}"})
 
-    response = client.get("/chats?limit=2")
+    response = client.get("/api/chats?limit=2")
 
     assert response.status_code == 200
     assert len(response.json()) == 2
 
 
 def test_delete_chat(client):
-    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
-    response = client.delete(f"/chats/{chat_id}")
+    response = client.delete(f"/api/chats/{chat_id}")
 
     assert response.status_code == 204
-    chats = client.get("/chats?limit=10").json()
+    chats = client.get("/api/chats?limit=10").json()
     assert all(c["id"] != chat_id for c in chats)
 
 
 # --- Messages ---
 
 def test_fetch_messages_after_create_chat(client):
-    chat_id = client.post("/chats", json={"message": "Hello"}).json()["id"]
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
-    response = client.get(f"/chats/{chat_id}/messages")
+    response = client.get(f"/api/chats/{chat_id}/messages")
 
     assert response.status_code == 200
     messages = response.json()
@@ -79,21 +79,21 @@ def test_fetch_messages_after_create_chat(client):
 
 
 def test_send_message_lifecycle(client_with_worker):
-    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
-    first_assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
+    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    first_assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
-    pending_response = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "Follow up"})
+    pending_response = client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "Follow up"})
     assert pending_response.status_code == 409
     assert pending_response.json()["error"] == "last_assistant_message_not_finished"
 
-    with client_with_worker.stream("GET", f"/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
+    with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
         list(resp.iter_lines())
 
-    messages = client_with_worker.get(f"/chats/{chat_id}/messages").json()
+    messages = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == HARDCODED_RESPONSE
 
-    follow_up = client_with_worker.post(f"/chats/{chat_id}/messages", json={"content": "What is the weather?"})
+    follow_up = client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "What is the weather?"})
     assert follow_up.status_code == 201
     assert follow_up.json()["role"] == "assistant"
     assert follow_up.json()["status"] == "pending"
@@ -113,9 +113,9 @@ def test_stream_assistant_response(client_with_worker):
                     break
         return events
 
-    chat_id = client_with_worker.post("/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client_with_worker.get(f"/chats/{chat_id}/messages").json()[1]["id"]
-    url = f"/chats/{chat_id}/messages/{assistant_id}/stream"
+    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
     with client_with_worker.stream("GET", url) as first_resp:
         assert first_resp.status_code == 200
