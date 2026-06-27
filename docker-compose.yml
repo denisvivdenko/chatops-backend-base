@@ -1,6 +1,7 @@
 services:
   api:
     profiles: [deploy]
+    image: ${APP_IMAGE:-chatops-backend:latest}
     build: .
     command: python -m chatops.api.main
     ports:
@@ -13,6 +14,7 @@ services:
 
   worker:
     profiles: [deploy]
+    image: ${APP_IMAGE:-chatops-backend:latest}
     build: .
     command: python -m chatops.workers.worker
     environment:
@@ -32,7 +34,7 @@ services:
 
   tests:
     profiles: [tests]
-    image: ${APP_IMAGE:-chatops-backend:local}
+    image: ${APP_IMAGE:-chatops-backend:latest}
     build: .
     command: pytest tests/ --integration -v
     volumes:
