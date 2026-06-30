@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from typing import Annotated
 
 import redis as redis_lib
 from fastapi import Depends
@@ -35,7 +36,11 @@ def get_event_stream() -> EventStream:
 
 
 def get_chat_service(
-    repo: ChatRepository = Depends(get_chat_repository),
-    jobs: JobStream = Depends(get_job_stream),
+    repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    jobs: Annotated[JobStream, Depends(get_job_stream)],
 ) -> ChatService:
     return ChatService(chat_repository=repo, jobs_stream=jobs)
+
+
+ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+EventStreamDep = Annotated[EventStream, Depends(get_event_stream)]

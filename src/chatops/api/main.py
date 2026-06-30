@@ -5,21 +5,20 @@ from typing import AsyncIterator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-from fastapi import APIRouter, Depends, FastAPI, Query
+from fastapi import APIRouter, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from chatops.api.dependencies import (
+    ChatServiceDep,
+    EventStreamDep,
     get_chat_repository,
-    get_chat_service,
-    get_event_stream,
     get_job_stream,
     get_result_stream,
 )
 from chatops.consumers.result_consumer import ResultConsumer
 from chatops.domain.chat import Chat, Message
-from chatops.observers.event_stream import EventStream
 from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
 from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 
@@ -37,8 +36,8 @@ router = APIRouter(prefix="/api")
 
 @router.get("/chats", response_model=list[Chat])
 def fetch_chats(
+    service: ChatServiceDep,
     limit: int = Query(default=10, ge=1),
-    service: ChatService = Depends(get_chat_service),
 ) -> list[Chat]:
     return service.fetch_chats(limit=limit)
 
@@ -46,7 +45,7 @@ def fetch_chats(
 @router.post("/chats", status_code=201, response_model=Chat)
 def create_chat(
     body: CreateChatRequest,
-    service: ChatService = Depends(get_chat_service),
+    service: ChatServiceDep,
 ) -> Chat:
     return service.create_chat(body.message)
 
@@ -54,7 +53,7 @@ def create_chat(
 @router.delete("/chats/{chat_id}", status_code=204)
 def delete_chat(
     chat_id: str,
-    service: ChatService = Depends(get_chat_service),
+    service: ChatServiceDep,
 ) -> None:
     service.delete_chat(chat_id)
 
@@ -62,7 +61,7 @@ def delete_chat(
 @router.get("/chats/{chat_id}/messages", response_model=list[Message])
 def fetch_messages(
     chat_id: str,
-    service: ChatService = Depends(get_chat_service),
+    service: ChatServiceDep,
 ) -> list[Message]:
     return service.fetch_messages(chat_id)
 
@@ -71,7 +70,7 @@ def fetch_messages(
 def send_message(
     chat_id: str,
     body: SendMessageRequest,
-    service: ChatService = Depends(get_chat_service),
+    service: ChatServiceDep,
 ):
     try:
         return service.send_message(chat_id, body.content)
@@ -83,8 +82,8 @@ def send_message(
 def stream_message(
     chat_id: str,
     message_id: str,
-    service: ChatService = Depends(get_chat_service),
-    event_stream: EventStream = Depends(get_event_stream),
+    service: ChatServiceDep,
+    event_stream: EventStreamDep,
 ) -> StreamingResponse:
     async def event_generator() -> AsyncIterator[str]:
         tokens = []
@@ -101,12 +100,11 @@ def stream_message(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Resolve through overrides so tests can substitute implementations.
-    repo = app.dependency_overrides.get(get_chat_repository, get_chat_repository)()
-    jobs = app.dependency_overrides.get(get_job_stream, get_job_stream)()
-    results = app.dependency_overrides.get(get_result_stream, get_result_stream)()
+    result_stream = getattr(app.state, 'result_stream', None) or get_result_stream()
+    repo = getattr(app.state, 'chat_repository', None) or get_chat_repository()
+    jobs = getattr(app.state, 'job_stream', None) or get_job_stream()
     service = ChatService(chat_repository=repo, jobs_stream=jobs)
-    consumer = ResultConsumer(result_stream=results, chat_service=service).start()
+    consumer = ResultConsumer(result_stream=result_stream, chat_service=service).start()
     yield
     consumer.stop()
 

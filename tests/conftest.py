@@ -62,23 +62,34 @@ def infra(request):
     redis_client.close()
 
 
-@pytest.fixture
-def client(infra):
+def _setup_app(infra):
+    app.state.chat_repository = infra["repo"]
+    app.state.job_stream = infra["job_stream"]
+    app.state.result_stream = infra["result_stream"]
     app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
     app.dependency_overrides[get_result_stream] = lambda: infra["result_stream"]
     app.dependency_overrides[get_event_stream] = lambda: infra["event_stream"]
+
+
+def _teardown_app():
+    app.dependency_overrides.clear()
+    del app.state.chat_repository
+    del app.state.job_stream
+    del app.state.result_stream
+
+
+@pytest.fixture
+def client(infra):
+    _setup_app(infra)
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
+    _teardown_app()
 
 
 @pytest.fixture
 def client_with_worker(infra):
-    app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
-    app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
-    app.dependency_overrides[get_result_stream] = lambda: infra["result_stream"]
-    app.dependency_overrides[get_event_stream] = lambda: infra["event_stream"]
+    _setup_app(infra)
     worker = Worker(
         jobs_stream=infra["job_stream"],
         result_stream=infra["result_stream"],
@@ -87,4 +98,4 @@ def client_with_worker(infra):
     with TestClient(app) as c:
         yield c
     worker.stop()
-    app.dependency_overrides.clear()
+    _teardown_app()
