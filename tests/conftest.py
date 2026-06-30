@@ -16,7 +16,7 @@ from chatops.jobs.result_stream import InMemoryResultStream, RedisResultStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.redis_event_stream import RedisEventStream
 from chatops.repositories.chat_repository import InMemoryChatRepository
-from chatops.workers.worker import Worker
+from chatops.workers.worker import Worker, TEST_RESPONSE
 
 
 def pytest_addoption(parser):
@@ -94,6 +94,7 @@ def client_with_worker(infra):
         jobs_stream=infra["job_stream"],
         result_stream=infra["result_stream"],
         event_stream=infra["event_stream"],
+        response=TEST_RESPONSE,
     ).start()
     with TestClient(app) as c:
         yield c

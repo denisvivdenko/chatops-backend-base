@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from chatops.workers.worker import HARDCODED_RESPONSE
+from chatops.workers.worker import TEST_RESPONSE
 
 
 # --- Chats ---
@@ -91,7 +91,7 @@ def test_send_message_lifecycle(client_with_worker):
 
     messages = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "complete"
-    assert messages[1]["content"] == HARDCODED_RESPONSE
+    assert messages[1]["content"] == TEST_RESPONSE
 
     follow_up = client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "What is the weather?"})
     assert follow_up.status_code == 201
@@ -130,5 +130,5 @@ def test_stream_assistant_response(client_with_worker):
         first_events += _collect_events(first_iter)
 
     assert [e["seq_id"] for e in first_events] == list(range(len(first_events)))
-    assert "".join(e["token"] for e in first_events) == HARDCODED_RESPONSE
-    assert "".join(e["token"] for e in second_events) == HARDCODED_RESPONSE
+    assert "".join(e["token"] for e in first_events) == TEST_RESPONSE
+    assert "".join(e["token"] for e in second_events) == TEST_RESPONSE

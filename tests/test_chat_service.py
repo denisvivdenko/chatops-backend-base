@@ -6,7 +6,7 @@ from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import InMemoryChatRepository
 from chatops.jobs.job_stream import InMemoryJobStream
 from chatops.jobs.result_stream import InMemoryResultStream
-from chatops.workers.worker import Worker, HARDCODED_RESPONSE
+from chatops.workers.worker import Worker, TEST_RESPONSE
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.message_observer import MessageObserver
 
@@ -63,10 +63,10 @@ async def test_worker_streams_hardcoded_response() -> None:
     chat = service.create_chat("Hello")
     pending_assistant = service.fetch_messages(chat.id)[1]
 
-    Worker(jobs_stream=job_stream, result_stream=InMemoryResultStream(), event_stream=event_stream).start()
+    Worker(jobs_stream=job_stream, result_stream=InMemoryResultStream(), event_stream=event_stream, response=TEST_RESPONSE).start()
 
     events = [e async for e in MessageObserver(chat.id, pending_assistant.id, event_stream)]
-    assert "".join(e.token for e in events) == HARDCODED_RESPONSE
+    assert "".join(e.token for e in events) == TEST_RESPONSE
 
 
 def test_can_send_next_message_after_assistant_completes() -> None:

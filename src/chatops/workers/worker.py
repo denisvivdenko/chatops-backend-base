@@ -33,17 +33,26 @@ function greet(name: string): string {
 ---
 
 Let me know what you'd like to explore next.`;
-"""[:10]
+"""
 
+
+TEST_RESPONSE = HARDCODED_RESPONSE[:12]
 
 logger = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, jobs_stream: JobStream, result_stream: ResultStream, event_stream: EventStream) -> None:
+    def __init__(
+        self,
+        jobs_stream: JobStream,
+        result_stream: ResultStream,
+        event_stream: EventStream,
+        response: str = HARDCODED_RESPONSE,
+    ) -> None:
         self._jobs = jobs_stream
         self._results = result_stream
         self._event_stream = event_stream
+        self._response = response
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -73,11 +82,11 @@ class Worker:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
         chunk_size = 6
-        for i in range(0, len(HARDCODED_RESPONSE), chunk_size):
-            self._event_stream.write(stream_key, {"token": HARDCODED_RESPONSE[i:i + chunk_size]})
+        for i in range(0, len(self._response), chunk_size):
+            self._event_stream.write(stream_key, {"token": self._response[i:i + chunk_size]})
             time.sleep(0.1)
         self._event_stream.write(stream_key, {"token": EOM})
-        self._results.publish(JobResult(chat_id=job.chat_id, message_id=job.message_id, content=HARDCODED_RESPONSE))
+        self._results.publish(JobResult(chat_id=job.chat_id, message_id=job.message_id, content=self._response))
         logger.info("Finished job chat_id=%s message_id=%s", job.chat_id, job.message_id)
 
 
