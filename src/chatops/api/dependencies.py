@@ -2,10 +2,11 @@ import os
 from functools import lru_cache
 from typing import Annotated
 
+import pymongo
 import redis as redis_lib
 from fastapi import Depends
 
-from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
+from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
 from chatops.jobs.job_stream import JobStream, RedisJobStream
 from chatops.jobs.result_stream import ResultStream, RedisResultStream
 from chatops.observers.event_stream import EventStream
@@ -19,8 +20,13 @@ def get_redis_client() -> redis_lib.Redis:
 
 
 @lru_cache
+def get_mongo_client() -> pymongo.MongoClient:
+    return pymongo.MongoClient(os.environ["MONGO_HOST"], 27017)
+
+
+@lru_cache
 def get_chat_repository() -> ChatRepository:
-    return InMemoryChatRepository()
+    return MongoChatRepository(get_mongo_client())
 
 
 def get_job_stream() -> JobStream:

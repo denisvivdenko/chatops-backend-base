@@ -1,5 +1,6 @@
 import os
 
+import pymongo
 import pytest
 import redis as redis_lib
 from fastapi.testclient import TestClient
@@ -11,12 +12,13 @@ from chatops.api.dependencies import (
     get_job_stream,
     get_result_stream,
 )
-from chatops.jobs.job_stream import InMemoryJobStream, RedisJobStream
-from chatops.jobs.result_stream import InMemoryResultStream, RedisResultStream
-from chatops.observers.in_memory_event_stream import InMemoryEventStream
+from chatops.jobs.job_stream import RedisJobStream
+from chatops.jobs.result_stream import RedisResultStream
 from chatops.observers.redis_event_stream import RedisEventStream
-from chatops.repositories.chat_repository import InMemoryChatRepository
+from chatops.repositories.chat_repository import MongoChatRepository
 from chatops.workers.worker import Worker, TEST_RESPONSE
+
+MONGO_TEST_DB = "chatops_test"
 
 
 def pytest_addoption(parser):
@@ -36,30 +38,28 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(params=[
-    "memory",
-    pytest.param("redis", marks=pytest.mark.integration),
+    pytest.param("redis+mongo", marks=pytest.mark.integration),
 ])
 def infra(request):
-    if request.param == "memory":
-        yield dict(
-            repo=InMemoryChatRepository(),
-            job_stream=InMemoryJobStream(),
-            result_stream=InMemoryResultStream(),
-            event_stream=InMemoryEventStream(),
-        )
-        return
-
     redis_host = os.environ.get("REDIS_HOST", "localhost")
     redis_client = redis_lib.Redis(host=redis_host, port=6379, db=1)
     redis_client.flushdb()
+
+    mongo_host = os.environ.get("MONGO_HOST", "localhost")
+    mongo_client = pymongo.MongoClient(mongo_host, 27017)
+    mongo_client.drop_database(MONGO_TEST_DB)
+
     yield dict(
-        repo=InMemoryChatRepository(),
+        repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
         job_stream=RedisJobStream(redis_client),
         result_stream=RedisResultStream(redis_client),
         event_stream=RedisEventStream(redis_client),
     )
+
     redis_client.flushdb()
     redis_client.close()
+    mongo_client.drop_database(MONGO_TEST_DB)
+    mongo_client.close()
 
 
 def _setup_app(infra):
