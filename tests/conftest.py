@@ -1,5 +1,6 @@
 import os
 
+import pymongo
 import pytest
 import redis as redis_lib
 from fastapi.testclient import TestClient
@@ -15,8 +16,10 @@ from chatops.jobs.job_stream import InMemoryJobStream, RedisJobStream
 from chatops.jobs.result_stream import InMemoryResultStream, RedisResultStream
 from chatops.observers.in_memory_event_stream import InMemoryEventStream
 from chatops.observers.redis_event_stream import RedisEventStream
-from chatops.repositories.chat_repository import InMemoryChatRepository
+from chatops.repositories.chat_repository import InMemoryChatRepository, MongoChatRepository
 from chatops.workers.worker import Worker, TEST_RESPONSE
+
+MONGO_TEST_DB = "chatops_test"
 
 
 def pytest_addoption(parser):
@@ -38,6 +41,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(params=[
     "memory",
     pytest.param("redis", marks=pytest.mark.integration),
+    pytest.param("mongo", marks=pytest.mark.integration),
 ])
 def infra(request):
     if request.param == "memory":
@@ -47,6 +51,20 @@ def infra(request):
             result_stream=InMemoryResultStream(),
             event_stream=InMemoryEventStream(),
         )
+        return
+
+    if request.param == "mongo":
+        mongo_host = os.environ.get("MONGO_HOST", "localhost")
+        mongo_client = pymongo.MongoClient(mongo_host, 27017)
+        mongo_client.drop_database(MONGO_TEST_DB)
+        yield dict(
+            repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
+            job_stream=InMemoryJobStream(),
+            result_stream=InMemoryResultStream(),
+            event_stream=InMemoryEventStream(),
+        )
+        mongo_client.drop_database(MONGO_TEST_DB)
+        mongo_client.close()
         return
 
     redis_host = os.environ.get("REDIS_HOST", "localhost")
