@@ -3,7 +3,7 @@ import threading
 import time
 
 from chatops.domain.chat import EOM
-from chatops.stream.job_stream import JobStream, AssistantJob, ConsumeTimeout
+from chatops.stream.job_stream import JobStream, AssistantJob
 from chatops.stream.event_stream import EventStream
 from chatops.services.chat_service import ChatService
 
@@ -75,7 +75,7 @@ class Worker:
         while not self._stop.is_set():
             try:
                 self._process(self._jobs.consume())
-            except ConsumeTimeout:
+            except TimeoutError:
                 pass
 
     def _process(self, job: AssistantJob) -> None:

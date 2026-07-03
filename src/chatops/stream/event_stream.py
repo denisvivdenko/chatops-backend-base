@@ -12,7 +12,7 @@ class StreamEntry(NamedTuple):
     data: dict[str, str]
 
 
-class StreamNotFoundError(Exception):
+class StreamTimeoutError(TimeoutError):
     pass
 
 
@@ -27,7 +27,7 @@ class EventStream(ABC):
 
     @abstractmethod
     async def read(self, stream_key: str, last_id: str = "0") -> list[StreamEntry]:
-        """Raises StreamNotFoundError if the stream does not exist."""
+        """Raises StreamTimeoutError if no new entries arrive before the timeout elapses."""
         raise NotImplementedError
 
 
@@ -51,7 +51,7 @@ class InMemoryEventStream(EventStream):
                     return new_entries
 
             if time.monotonic() >= deadline:
-                raise StreamNotFoundError(stream_key)
+                raise StreamTimeoutError(stream_key)
 
             await asyncio.sleep(0.05)
 
@@ -80,7 +80,7 @@ class RedisEventStream(EventStream):
             lambda: self._client.xread({stream_key: last_id}, block=timeout_ms),
         )
         if not result:
-            raise StreamNotFoundError(stream_key)
+            raise StreamTimeoutError(stream_key)
         _, entries = result[0]
         return [
             StreamEntry(

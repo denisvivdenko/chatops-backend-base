@@ -11,16 +11,14 @@ class AssistantJob(NamedTuple):
     message_id: str
 
 
-class ConsumeTimeout(Exception):
-    pass
-
-
 class JobStream(ABC):
     @abstractmethod
     def publish(self, job: AssistantJob) -> None: ...
 
     @abstractmethod
-    def consume(self) -> AssistantJob: ...
+    def consume(self) -> AssistantJob:
+        """Raises TimeoutError if no job is available before the timeout elapses."""
+        ...
 
 
 class InMemoryJobStream(JobStream):
@@ -34,7 +32,7 @@ class InMemoryJobStream(JobStream):
         try:
             return self._queue.get(timeout=1)
         except queue.Empty:
-            raise ConsumeTimeout()
+            raise TimeoutError()
 
 
 REDIS_JOBS_KEY = "jobs"
@@ -50,6 +48,6 @@ class RedisJobStream(JobStream):
     def consume(self) -> AssistantJob:
         result = self._client.brpop(REDIS_JOBS_KEY, timeout=1)
         if result is None:
-            raise ConsumeTimeout()
+            raise TimeoutError()
         _, value = result
         return AssistantJob(**json.loads(value))

@@ -1,7 +1,7 @@
 import time
 import pytest
 
-from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
+from chatops.services.chat_service import ChatService, AssistantMessagePendingError
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import InMemoryChatRepository
 from chatops.stream.job_stream import InMemoryJobStream
@@ -48,7 +48,7 @@ def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up() 
     assert assistant_message.role == MessageRole.ASSISTANT
     assert assistant_message.status == MessageStatus.PENDING
 
-    with pytest.raises(LastAssistantMessageIsNotFinished):
+    with pytest.raises(AssistantMessagePendingError):
         service.send_message(chat.id, "What is the weather today?")
 
 

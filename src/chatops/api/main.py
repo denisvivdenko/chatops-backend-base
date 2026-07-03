@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from chatops.api.dependencies import ChatServiceDep, EventStreamDep
 from chatops.domain.chat import Chat, Message
 from chatops.stream.message_observer import MessageObserver, MessageNotObservableError
-from chatops.services.chat_service import LastAssistantMessageIsNotFinished
+from chatops.services.chat_service import AssistantMessagePendingError
 
 
 class CreateChatRequest(BaseModel):
@@ -66,7 +66,7 @@ def send_message(
 ):
     try:
         return service.send_message(chat_id, body.content)
-    except LastAssistantMessageIsNotFinished:
+    except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
 
 

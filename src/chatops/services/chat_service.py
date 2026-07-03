@@ -6,7 +6,7 @@ from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRep
 from chatops.stream.job_stream import JobStream, InMemoryJobStream, AssistantJob
 
 
-class LastAssistantMessageIsNotFinished(Exception):
+class AssistantMessagePendingError(Exception):
     pass
 
 
@@ -30,7 +30,7 @@ class ChatService:
     def send_message(self, chat_id: str, content: str) -> Message:
         messages = self._repo.fetch_messages(chat_id)
         if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
-            raise LastAssistantMessageIsNotFinished()
+            raise AssistantMessagePendingError()
 
         now = int(time.time() * 1000)
         chat = self._repo.fetch_chat(chat_id)

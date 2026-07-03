@@ -1,14 +1,14 @@
 from typing import AsyncIterator
 
 from chatops.domain.chat import EOM, MessageStreamEvent
-from chatops.stream.event_stream import EventStream, StreamNotFoundError
+from chatops.stream.event_stream import EventStream, StreamTimeoutError
 
 
 class MessageNotObservableError(Exception):
     pass
 
 
-class MessageIsAlreadyConsumed(Exception):
+class MessageAlreadyConsumedError(Exception):
     pass
 
 
@@ -21,7 +21,7 @@ class MessageObserver:
 
     def __aiter__(self) -> AsyncIterator[MessageStreamEvent]:
         if self._consumed:
-            raise MessageIsAlreadyConsumed()
+            raise MessageAlreadyConsumedError()
         self._consumed = True
         return self._iterate()
 
@@ -39,5 +39,5 @@ class MessageObserver:
                     yield MessageStreamEvent(seq_id=seq_id, token=token)
                     last_id = entry.id
                     seq_id += 1
-        except StreamNotFoundError:
+        except StreamTimeoutError:
             raise MessageNotObservableError(f"Message {self._message_id} is not found.")

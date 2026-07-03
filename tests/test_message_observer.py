@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from chatops.stream.event_stream import EventStream, StreamEntry, StreamNotFoundError
-from chatops.stream.message_observer import MessageObserver, MessageNotObservableError, MessageIsAlreadyConsumed
+from chatops.stream.event_stream import EventStream, StreamEntry, StreamTimeoutError
+from chatops.stream.message_observer import MessageObserver, MessageNotObservableError, MessageAlreadyConsumedError
 from chatops.domain.chat import EOM
 
 
@@ -12,7 +12,7 @@ def make_stream(tokens: list[str], exists: bool = True) -> EventStream:
     if exists:
         stream.read = AsyncMock(return_value=entries)
     else:
-        stream.read = AsyncMock(side_effect=StreamNotFoundError)
+        stream.read = AsyncMock(side_effect=StreamTimeoutError)
     return stream
 
 
@@ -34,5 +34,5 @@ async def test_observer_yields_tokens_excluding_eom() -> None:
 async def test_observer_raises_on_second_iteration() -> None:
     observer = MessageObserver("chat-1", "msg-1", stream=make_stream(["Hi", " there", EOM]))
     _ = [e async for e in observer]
-    with pytest.raises(MessageIsAlreadyConsumed):
+    with pytest.raises(MessageAlreadyConsumedError):
         _ = [e async for e in observer]
