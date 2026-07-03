@@ -8,7 +8,6 @@ from fastapi import Depends
 
 from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
 from chatops.jobs.job_stream import JobStream, RedisJobStream
-from chatops.jobs.result_stream import ResultStream, RedisResultStream
 from chatops.observers.event_stream import EventStream
 from chatops.observers.redis_event_stream import RedisEventStream
 from chatops.services.chat_service import ChatService
@@ -31,10 +30,6 @@ def get_chat_repository() -> ChatRepository:
 
 def get_job_stream() -> JobStream:
     return RedisJobStream(get_redis_client())
-
-
-def get_result_stream() -> ResultStream:
-    return RedisResultStream(get_redis_client())
 
 
 def get_event_stream() -> EventStream:

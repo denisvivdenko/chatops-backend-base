@@ -10,12 +10,11 @@ from chatops.api.dependencies import (
     get_chat_repository,
     get_event_stream,
     get_job_stream,
-    get_result_stream,
 )
 from chatops.jobs.job_stream import RedisJobStream
-from chatops.jobs.result_stream import RedisResultStream
 from chatops.observers.redis_event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
+from chatops.services.chat_service import ChatService
 from chatops.workers.worker import Worker, TEST_RESPONSE
 
 MONGO_TEST_DB = "chatops_test"
@@ -52,7 +51,6 @@ def infra(request):
     yield dict(
         repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
         job_stream=RedisJobStream(redis_client),
-        result_stream=RedisResultStream(redis_client),
         event_stream=RedisEventStream(redis_client),
     )
 
@@ -63,20 +61,13 @@ def infra(request):
 
 
 def _setup_app(infra):
-    app.state.chat_repository = infra["repo"]
-    app.state.job_stream = infra["job_stream"]
-    app.state.result_stream = infra["result_stream"]
     app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
-    app.dependency_overrides[get_result_stream] = lambda: infra["result_stream"]
     app.dependency_overrides[get_event_stream] = lambda: infra["event_stream"]
 
 
 def _teardown_app():
     app.dependency_overrides.clear()
-    del app.state.chat_repository
-    del app.state.job_stream
-    del app.state.result_stream
 
 
 @pytest.fixture
@@ -90,9 +81,10 @@ def client(infra):
 @pytest.fixture
 def client_with_worker(infra):
     _setup_app(infra)
+    chat_service = ChatService(chat_repository=infra["repo"], jobs_stream=infra["job_stream"])
     worker = Worker(
         jobs_stream=infra["job_stream"],
-        result_stream=infra["result_stream"],
+        chat_service=chat_service,
         event_stream=infra["event_stream"],
         response=TEST_RESPONSE,
     ).start()

@@ -56,12 +56,20 @@ class ChatService:
         return assistant_message
 
     def complete_message(self, chat_id: str, message_id: str, content: str) -> None:
+        self._update_message_status(chat_id, message_id, MessageStatus.COMPLETE, content=content)
+
+    def fail_message(self, chat_id: str, message_id: str) -> None:
+        self._update_message_status(chat_id, message_id, MessageStatus.FAILED)
+
+    def _update_message_status(
+        self, chat_id: str, message_id: str, status: MessageStatus, content: str | None = None,
+    ) -> None:
         for message in self._repo.fetch_messages(chat_id):
             if message.id == message_id:
-                self._repo.save_message(
-                    chat_id,
-                    message.model_copy(update={"status": MessageStatus.COMPLETE, "content": content}),
-                )
+                update = {"status": status}
+                if content is not None:
+                    update["content"] = content
+                self._repo.save_message(chat_id, message.model_copy(update=update))
                 return
 
     def fetch_chats(self, limit: int) -> list[Chat]:

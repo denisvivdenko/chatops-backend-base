@@ -4,8 +4,8 @@ import time
 
 from chatops.domain.chat import EOM
 from chatops.jobs.job_stream import JobStream, AssistantJob, ConsumeTimeout
-from chatops.jobs.result_stream import ResultStream, JobResult
 from chatops.observers.event_stream import EventStream
+from chatops.services.chat_service import ChatService
 
 HARDCODED_RESPONSE = """
 ## Markdown support
@@ -45,12 +45,12 @@ class Worker:
     def __init__(
         self,
         jobs_stream: JobStream,
-        result_stream: ResultStream,
+        chat_service: ChatService,
         event_stream: EventStream,
         response: str = HARDCODED_RESPONSE,
     ) -> None:
         self._jobs = jobs_stream
-        self._results = result_stream
+        self._service = chat_service
         self._event_stream = event_stream
         self._response = response
         self._stop = threading.Event()
@@ -80,28 +80,38 @@ class Worker:
 
     def _process(self, job: AssistantJob) -> None:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
-        stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
-        chunk_size = 6
-        for i in range(0, len(self._response), chunk_size):
-            self._event_stream.write(stream_key, {"token": self._response[i:i + chunk_size]})
-            time.sleep(0.1)
-        self._event_stream.write(stream_key, {"token": EOM})
-        self._results.publish(JobResult(chat_id=job.chat_id, message_id=job.message_id, content=self._response))
-        logger.info("Finished job chat_id=%s message_id=%s", job.chat_id, job.message_id)
+        try:
+            stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
+            chunk_size = 6
+            for i in range(0, len(self._response), chunk_size):
+                self._event_stream.write(stream_key, {"token": self._response[i:i + chunk_size]})
+                time.sleep(0.1)
+            self._service.complete_message(job.chat_id, job.message_id, self._response)
+            self._event_stream.write(stream_key, {"token": EOM})
+            logger.info("Finished job chat_id=%s message_id=%s", job.chat_id, job.message_id)
+        except Exception:
+            logger.exception("Failed job chat_id=%s message_id=%s", job.chat_id, job.message_id)
+            self._service.fail_message(job.chat_id, job.message_id)
 
 
 if __name__ == "__main__":
     import os
+    import pymongo
     import redis
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
     from chatops.jobs.job_stream import RedisJobStream
-    from chatops.jobs.result_stream import RedisResultStream
     from chatops.observers.redis_event_stream import RedisEventStream
+    from chatops.repositories.chat_repository import MongoChatRepository
 
     redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
+    mongo_client = pymongo.MongoClient(os.environ["MONGO_HOST"], 27017)
+    job_stream = RedisJobStream(redis_client)
+    chat_service = ChatService(chat_repository=MongoChatRepository(mongo_client), jobs_stream=job_stream)
 
     Worker(
-        jobs_stream=RedisJobStream(redis_client),
-        result_stream=RedisResultStream(redis_client),
+        jobs_stream=job_stream,
+        chat_service=chat_service,
         event_stream=RedisEventStream(redis_client),
     ).start().join()
