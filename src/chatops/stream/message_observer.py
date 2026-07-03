@@ -1,7 +1,7 @@
 from typing import AsyncIterator
 
 from chatops.domain.chat import EOM, MessageStreamEvent
-from chatops.observers.event_stream import EventStream, StreamNotFoundError
+from chatops.stream.event_stream import EventStream, StreamNotFoundError
 
 
 class MessageNotObservableError(Exception):

@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from chatops.observers.event_stream import EventStream, StreamEntry, StreamNotFoundError
-from chatops.observers.message_observer import MessageObserver, MessageNotObservableError, MessageIsAlreadyConsumed
+from chatops.stream.event_stream import EventStream, StreamEntry, StreamNotFoundError
+from chatops.stream.message_observer import MessageObserver, MessageNotObservableError, MessageIsAlreadyConsumed
 from chatops.domain.chat import EOM
 
 

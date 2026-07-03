@@ -11,8 +11,8 @@ from chatops.api.dependencies import (
     get_event_stream,
     get_job_stream,
 )
-from chatops.jobs.job_stream import RedisJobStream
-from chatops.observers.redis_event_stream import RedisEventStream
+from chatops.stream.job_stream import RedisJobStream
+from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
 from chatops.services.chat_service import ChatService
 from chatops.workers.worker import Worker, TEST_RESPONSE

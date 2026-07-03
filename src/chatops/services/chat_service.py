@@ -3,7 +3,7 @@ import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
-from chatops.jobs.job_stream import JobStream, InMemoryJobStream, AssistantJob
+from chatops.stream.job_stream import JobStream, InMemoryJobStream, AssistantJob
 
 
 class LastAssistantMessageIsNotFinished(Exception):

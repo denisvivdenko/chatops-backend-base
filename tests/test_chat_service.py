@@ -4,10 +4,10 @@ import pytest
 from chatops.services.chat_service import ChatService, LastAssistantMessageIsNotFinished
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.repositories.chat_repository import InMemoryChatRepository
-from chatops.jobs.job_stream import InMemoryJobStream
+from chatops.stream.job_stream import InMemoryJobStream
 from chatops.workers.worker import Worker, TEST_RESPONSE
-from chatops.observers.in_memory_event_stream import InMemoryEventStream
-from chatops.observers.message_observer import MessageObserver
+from chatops.stream.event_stream import InMemoryEventStream
+from chatops.stream.message_observer import MessageObserver
 
 
 def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit() -> None:

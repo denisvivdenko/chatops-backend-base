@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from chatops.api.dependencies import ChatServiceDep, EventStreamDep
 from chatops.domain.chat import Chat, Message
-from chatops.observers.message_observer import MessageObserver, MessageNotObservableError
+from chatops.stream.message_observer import MessageObserver, MessageNotObservableError
 from chatops.services.chat_service import LastAssistantMessageIsNotFinished
 
 

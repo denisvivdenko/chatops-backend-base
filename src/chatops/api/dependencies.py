@@ -7,9 +7,8 @@ import redis as redis_lib
 from fastapi import Depends
 
 from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
-from chatops.jobs.job_stream import JobStream, RedisJobStream
-from chatops.observers.event_stream import EventStream
-from chatops.observers.redis_event_stream import RedisEventStream
+from chatops.stream.job_stream import JobStream, RedisJobStream
+from chatops.stream.event_stream import EventStream, RedisEventStream
 from chatops.services.chat_service import ChatService
 
 

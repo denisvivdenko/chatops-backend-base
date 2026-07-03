@@ -3,8 +3,8 @@ import threading
 import time
 
 from chatops.domain.chat import EOM
-from chatops.jobs.job_stream import JobStream, AssistantJob, ConsumeTimeout
-from chatops.observers.event_stream import EventStream
+from chatops.stream.job_stream import JobStream, AssistantJob, ConsumeTimeout
+from chatops.stream.event_stream import EventStream
 from chatops.services.chat_service import ChatService
 
 HARDCODED_RESPONSE = """
@@ -101,8 +101,8 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    from chatops.jobs.job_stream import RedisJobStream
-    from chatops.observers.redis_event_stream import RedisEventStream
+    from chatops.stream.job_stream import RedisJobStream
+    from chatops.stream.event_stream import RedisEventStream
     from chatops.repositories.chat_repository import MongoChatRepository
 
     redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
