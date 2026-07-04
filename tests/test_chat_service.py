@@ -3,16 +3,16 @@ import pytest
 
 from chatops.services.chat_service import ChatService, AssistantMessagePendingError
 from chatops.domain.chat import MessageRole, MessageStatus
-from chatops.repositories.chat_repository import InMemoryChatRepository
-from chatops.stream.job_stream import InMemoryJobStream
-from chatops.workers.worker import Worker, TEST_RESPONSE
-from chatops.stream.event_stream import InMemoryEventStream
+from chatops.settings import Settings
+from chatops.workers.worker import TEST_RESPONSE
 from chatops.stream.message_observer import MessageObserver
 
+FAIL_MESSAGE_AFTER_TIMEOUT = Settings().message_generation_timeout
 
-def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit() -> None:
-    service = ChatService(chat_repository=InMemoryChatRepository())
-    jobs_stream = InMemoryJobStream()
+
+def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    jobs_stream = infra["job_stream"]
     first_chat = service.create_chat("First message", jobs_stream)
     time.sleep(0.01)
     second_chat = service.create_chat("Second message", jobs_stream)
@@ -25,19 +25,19 @@ def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit() -> None:
     assert chats[1].id == second_chat.id
 
 
-def test_delete_chat() -> None:
-    service = ChatService(chat_repository=InMemoryChatRepository())
-    chat = service.create_chat("First message", InMemoryJobStream())
+def test_delete_chat(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("First message", infra["job_stream"])
     assert len(service.fetch_chats(limit=10)) == 1
     service.delete_chat(chat.id)
     assert len(service.fetch_chats(limit=10)) == 0
 
 
-def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up() -> None:
-    service = ChatService(chat_repository=InMemoryChatRepository())
-    jobs_stream = InMemoryJobStream()
+def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    jobs_stream = infra["job_stream"]
     chat = service.create_chat("Hello", jobs_stream)
-    messages = service.fetch_messages(chat.id)
+    messages = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)
 
     assert len(messages) == 2
 
@@ -54,29 +54,36 @@ def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up() 
         service.send_message(chat.id, "What is the weather today?", jobs_stream)
 
 
+def test_fail_message_marks_assistant_message_as_failed(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("Hello", infra["job_stream"])
+    assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+
+    service.fail_message(chat.id, assistant.id)
+
+    failed = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+    assert failed.id == assistant.id
+    assert failed.status == MessageStatus.FAILED
+
+
 @pytest.mark.asyncio
-async def test_worker_streams_hardcoded_response() -> None:
-    job_stream = InMemoryJobStream()
-    event_stream = InMemoryEventStream()
-    chat_repo = InMemoryChatRepository()
-
-    service = ChatService(chat_repository=chat_repo)
-    chat = service.create_chat("Hello", job_stream)
-    pending_assistant = service.fetch_messages(chat.id)[1]
-
-    Worker(jobs_stream=job_stream, chat_service=service, event_stream=event_stream, response=TEST_RESPONSE).start()
+async def test_worker_streams_hardcoded_response(infra, worker) -> None:
+    event_stream = infra["event_stream"]
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("Hello", infra["job_stream"])
+    pending_assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
 
     events = [e async for e in MessageObserver(chat.id, pending_assistant.id, event_stream)]
     assert "".join(e.token for e in events) == TEST_RESPONSE
 
 
-def test_can_send_next_message_after_assistant_completes() -> None:
-    chat_repository = InMemoryChatRepository()
+def test_can_send_next_message_after_assistant_completes(infra) -> None:
+    chat_repository = infra["repo"]
     service = ChatService(chat_repository=chat_repository)
-    jobs_stream = InMemoryJobStream()
+    jobs_stream = infra["job_stream"]
     chat = service.create_chat("Hello", jobs_stream)
 
-    assistant = service.fetch_messages(chat.id)[1]
+    assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
     chat_repository.save_message(chat.id, assistant.model_copy(update={"status": MessageStatus.COMPLETE, "content": "Done"}))
 
     response = service.send_message(chat.id, "What is the weather today?", jobs_stream)

@@ -100,6 +100,23 @@ def test_send_message_lifecycle(client_with_worker):
     assert follow_up.json()["status"] == "pending"
 
 
+@pytest.mark.parametrize(
+    "settings",
+    [{"message_generation_timeout": 0.05}],
+    indirect=True,
+)
+def test_assistant_message_marked_failed_when_not_picked_up_by_worker(client):
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+
+    messages = client.get(f"/api/chats/{chat_id}/messages").json()
+    assert messages[1]["status"] == "pending"
+
+    time.sleep(0.1)
+
+    messages = client.get(f"/api/chats/{chat_id}/messages").json()
+    assert messages[1]["status"] == "failed"
+
+
 # --- SSE streaming ---
 
 

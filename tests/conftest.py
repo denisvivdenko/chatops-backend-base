@@ -54,6 +54,7 @@ def infra(request):
         repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
         redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
+        event_stream=RedisEventStream(redis_client),
     )
 
     redis_client.flushdb()
@@ -94,16 +95,21 @@ def client(infra, settings):
 
 
 @pytest.fixture
-def client_with_worker(infra, settings):
-    _setup_app(infra, settings)
+def worker(infra, settings):
     chat_service = ChatService(chat_repository=infra["repo"])
-    worker = Worker(
+    w = Worker(
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,
         event_stream=_make_event_stream(infra, settings),
         response=TEST_RESPONSE,
     ).start()
+    yield w
+    w.stop()
+
+
+@pytest.fixture
+def client_with_worker(infra, settings, worker):
+    _setup_app(infra, settings)
     with TestClient(app) as c:
         yield c
-    worker.stop()
     _teardown_app()

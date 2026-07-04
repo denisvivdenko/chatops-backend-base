@@ -77,5 +77,17 @@ class ChatService:
     def delete_chat(self, chat_id: str) -> None:
         self._repo.delete_chat(chat_id)
 
-    def fetch_messages(self, chat_id: str) -> list[Message]:
-        return self._repo.fetch_messages(chat_id)
+    def fetch_messages(self, chat_id: str, fail_message_after_timeout: float) -> list[Message]:
+        messages = self._repo.fetch_messages(chat_id)
+        now = int(time.time() * 1000)
+        result = []
+        for message in messages:
+            if (
+                message.role == MessageRole.ASSISTANT
+                and message.status == MessageStatus.PENDING
+                and now - message.created_at > fail_message_after_timeout * 1000
+            ):
+                self.fail_message(chat_id, message.id)
+                message = message.model_copy(update={"status": MessageStatus.FAILED})
+            result.append(message)
+        return result

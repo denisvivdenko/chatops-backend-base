@@ -55,8 +55,9 @@ def delete_chat(
 def fetch_messages(
     chat_id: str,
     service: ChatServiceDep,
+    settings: SettingsDep,
 ) -> list[Message]:
-    return service.fetch_messages(chat_id)
+    return service.fetch_messages(chat_id, fail_message_after_timeout=settings.message_generation_timeout)
 
 
 @router.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
