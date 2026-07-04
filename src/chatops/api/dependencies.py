@@ -51,3 +51,4 @@ def get_chat_service(
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
 JobStreamDep = Annotated[JobStream, Depends(get_job_stream)]
 EventStreamDep = Annotated[EventStream, Depends(get_event_stream)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]

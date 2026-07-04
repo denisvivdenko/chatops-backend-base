@@ -132,3 +132,20 @@ def test_stream_assistant_response(client_with_worker):
     assert [e["seq_id"] for e in first_events] == list(range(len(first_events)))
     assert "".join(e["token"] for e in first_events) == TEST_RESPONSE
     assert "".join(e["token"] for e in second_events) == TEST_RESPONSE
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.2}],
+    indirect=True,
+)
+def test_stream_emits_error_event_when_generation_times_out(client):
+    url = "/api/chats/nonexistent-chat/messages/nonexistent-message/stream"
+
+    with client.stream("GET", url) as response:
+        assert response.status_code == 200
+        lines = list(response.iter_lines())
+
+    assert "event: error" in lines
+    data_line = lines[lines.index("event: error") + 1]
+    assert json.loads(data_line.removeprefix("data: ")) == {"error": "message_generation_timeout"}

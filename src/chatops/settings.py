@@ -8,3 +8,4 @@ class Settings(BaseSettings):
     mongo_port: int = 27017
     job_stream_timeout: float = 1.0
     event_stream_timeout: float = 3.0
+    message_generation_timeout: float = 10

@@ -2,7 +2,11 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from chatops.stream.event_stream import EventStream, StreamEntry, StreamTimeoutError
-from chatops.stream.message_observer import MessageObserver, MessageNotObservableError, MessageAlreadyConsumedError
+from chatops.stream.message_observer import (
+    MessageAlreadyConsumedError,
+    MessageGenerationTimeoutError,
+    MessageObserver,
+)
 from chatops.domain.chat import EOM
 
 
@@ -17,9 +21,11 @@ def make_stream(tokens: list[str], exists: bool = True) -> EventStream:
 
 
 @pytest.mark.asyncio
-async def test_observer_raises_when_stream_does_not_exist() -> None:
-    observer = MessageObserver("chat-1", "msg-1", stream=make_stream(["Hi", " there", EOM], exists=False))
-    with pytest.raises(MessageNotObservableError):
+async def test_observer_retries_on_stream_timeout_until_generation_timeout() -> None:
+    observer = MessageObserver(
+        "chat-1", "msg-1", stream=make_stream(["Hi", " there", EOM], exists=False), timeout=0.05
+    )
+    with pytest.raises(MessageGenerationTimeoutError):
         _ = [e async for e in observer]
 
 

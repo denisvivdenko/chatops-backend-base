@@ -10,7 +10,9 @@ from chatops.api.dependencies import (
     get_chat_repository,
     get_event_stream,
     get_job_stream,
+    get_settings,
 )
+from chatops.settings import Settings
 from chatops.stream.job_stream import RedisJobStream
 from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
@@ -50,8 +52,8 @@ def infra(request):
 
     yield dict(
         repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
+        redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
-        event_stream=RedisEventStream(redis_client),
     )
 
     redis_client.flushdb()
@@ -60,10 +62,21 @@ def infra(request):
     mongo_client.close()
 
 
-def _setup_app(infra):
+@pytest.fixture
+def settings(request) -> Settings:
+    overrides = getattr(request, "param", {})
+    return Settings(**overrides)
+
+
+def _make_event_stream(infra, settings):
+    return RedisEventStream(infra["redis_client"], timeout=settings.event_stream_timeout)
+
+
+def _setup_app(infra, settings):
     app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
-    app.dependency_overrides[get_event_stream] = lambda: infra["event_stream"]
+    app.dependency_overrides[get_event_stream] = lambda: _make_event_stream(infra, settings)
+    app.dependency_overrides[get_settings] = lambda: settings
 
 
 def _teardown_app():
@@ -71,21 +84,21 @@ def _teardown_app():
 
 
 @pytest.fixture
-def client(infra):
-    _setup_app(infra)
+def client(infra, settings):
+    _setup_app(infra, settings)
     with TestClient(app) as c:
         yield c
     _teardown_app()
 
 
 @pytest.fixture
-def client_with_worker(infra):
-    _setup_app(infra)
+def client_with_worker(infra, settings):
+    _setup_app(infra, settings)
     chat_service = ChatService(chat_repository=infra["repo"])
     worker = Worker(
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,
-        event_stream=infra["event_stream"],
+        event_stream=_make_event_stream(infra, settings),
         response=TEST_RESPONSE,
     ).start()
     with TestClient(app) as c:

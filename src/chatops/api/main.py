@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from chatops.api.dependencies import ChatServiceDep, EventStreamDep, JobStreamDep
+from chatops.api.dependencies import ChatServiceDep, EventStreamDep, JobStreamDep, SettingsDep
 from chatops.domain.chat import Chat, Message
-from chatops.stream.message_observer import MessageObserver, MessageNotObservableError
+from chatops.stream.message_observer import MessageGenerationTimeoutError, MessageObserver
 from chatops.services.chat_service import AssistantMessagePendingError
 
 
@@ -77,13 +77,18 @@ def stream_message(
     chat_id: str,
     message_id: str,
     event_stream: EventStreamDep,
+    settings: SettingsDep,
 ) -> StreamingResponse:
+    observer = MessageObserver(
+        chat_id, message_id, event_stream, timeout=settings.message_generation_timeout
+    )
+
     async def event_generator() -> AsyncIterator[str]:
         try:
-            async for event in MessageObserver(chat_id, message_id, event_stream):
+            async for event in observer:
                 yield f"data: {json.dumps(event.model_dump())}\n\n"
-        except MessageNotObservableError:
-            return
+        except MessageGenerationTimeoutError:
+            yield f"event: error\ndata: {json.dumps({'error': 'message_generation_timeout'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
