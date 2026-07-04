@@ -1,4 +1,5 @@
 import json
+import time
 import pytest
 
 from chatops.workers.worker import TEST_RESPONSE
@@ -147,5 +148,31 @@ def test_stream_emits_error_event_when_generation_times_out(client):
         lines = list(response.iter_lines())
 
     assert "event: error" in lines
+    data_line = lines[lines.index("event: error") + 1]
+    assert json.loads(data_line.removeprefix("data: ")) == {"error": "message_generation_timeout"}
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.3}],
+    indirect=True,
+)
+def test_reopening_stream_after_generation_timeout_receives_error(client_with_worker):
+    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
+
+    with client_with_worker.stream("GET", url) as first_resp:
+        first_line = next(line for line in first_resp.iter_lines() if line.startswith("data: "))
+    assert json.loads(first_line.removeprefix("data: "))["token"]
+
+    time.sleep(0.4)
+
+    with client_with_worker.stream("GET", url) as second_resp:
+        lines = list(second_resp.iter_lines())
+
+    assert "event: error" in lines
+    lines_before_error = lines[:lines.index("event: error")]
+    assert not any(line.startswith("data: ") for line in lines_before_error)
     data_line = lines[lines.index("event: error") + 1]
     assert json.loads(data_line.removeprefix("data: ")) == {"error": "message_generation_timeout"}

@@ -69,7 +69,9 @@ def settings(request) -> Settings:
 
 
 def _make_event_stream(infra, settings):
-    return RedisEventStream(infra["redis_client"], timeout=settings.event_stream_timeout)
+    return RedisEventStream(
+        infra["redis_client"], timeout=settings.event_stream_timeout, ttl=settings.message_generation_timeout,
+    )
 
 
 def _setup_app(infra, settings):

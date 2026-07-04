@@ -2,7 +2,7 @@ import time
 from typing import AsyncIterator
 
 from chatops.domain.chat import EOM, MessageStreamEvent
-from chatops.stream.event_stream import EventStream, StreamTimeoutError
+from chatops.stream.event_stream import EventStream
 
 
 class MessageAlreadyConsumedError(Exception):
@@ -45,7 +45,7 @@ class MessageObserver:
                 )
             try:
                 entries = await self._stream.read(stream_key, last_id=last_id)
-            except StreamTimeoutError:
+            except TimeoutError:
                 continue
             for entry in entries:
                 token = entry.data["token"]

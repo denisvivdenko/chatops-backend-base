@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from chatops.stream.event_stream import EventStream, StreamEntry, StreamTimeoutError
+from chatops.stream.event_stream import EventStream, StreamEntry
 from chatops.stream.message_observer import (
     MessageAlreadyConsumedError,
     MessageGenerationTimeoutError,
@@ -16,7 +16,7 @@ def make_stream(tokens: list[str], exists: bool = True) -> EventStream:
     if exists:
         stream.read = AsyncMock(return_value=entries)
     else:
-        stream.read = AsyncMock(side_effect=StreamTimeoutError)
+        stream.read = AsyncMock(side_effect=TimeoutError)
     return stream
 
 

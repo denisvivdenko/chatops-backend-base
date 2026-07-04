@@ -39,7 +39,10 @@ def get_job_stream() -> JobStream:
 
 
 def get_event_stream() -> EventStream:
-    return RedisEventStream(get_redis_client(), timeout=get_settings().event_stream_timeout)
+    settings = get_settings()
+    return RedisEventStream(
+        get_redis_client(), timeout=settings.event_stream_timeout, ttl=settings.message_generation_timeout,
+    )
 
 
 def get_chat_service(
