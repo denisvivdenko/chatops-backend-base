@@ -63,6 +63,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx2" },
+    { name = "pydantic-settings" },
     { name = "pymongo" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -73,6 +74,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.137.1" },
     { name = "httpx2", specifier = ">=2.4.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pymongo", specifier = ">=4.17.0" },
     { name = "pytest", specifier = ">=9.1.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },

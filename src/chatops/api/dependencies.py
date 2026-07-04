@@ -1,4 +1,3 @@
-import os
 from functools import lru_cache
 from typing import Annotated
 
@@ -7,19 +6,27 @@ import redis as redis_lib
 from fastapi import Depends
 
 from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
+from chatops.settings import Settings
 from chatops.stream.job_stream import JobStream, RedisJobStream
 from chatops.stream.event_stream import EventStream, RedisEventStream
 from chatops.services.chat_service import ChatService
 
 
 @lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+@lru_cache
 def get_redis_client() -> redis_lib.Redis:
-    return redis_lib.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
+    settings = get_settings()
+    return redis_lib.Redis(host=settings.redis_host, port=settings.redis_port, socket_timeout=None)
 
 
 @lru_cache
 def get_mongo_client() -> pymongo.MongoClient:
-    return pymongo.MongoClient(os.environ["MONGO_HOST"], 27017)
+    settings = get_settings()
+    return pymongo.MongoClient(settings.mongo_host, settings.mongo_port)
 
 
 @lru_cache
@@ -28,19 +35,19 @@ def get_chat_repository() -> ChatRepository:
 
 
 def get_job_stream() -> JobStream:
-    return RedisJobStream(get_redis_client())
+    return RedisJobStream(get_redis_client(), timeout=get_settings().job_stream_timeout)
 
 
 def get_event_stream() -> EventStream:
-    return RedisEventStream(get_redis_client())
+    return RedisEventStream(get_redis_client(), timeout=get_settings().event_stream_timeout)
 
 
 def get_chat_service(
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
-    jobs: Annotated[JobStream, Depends(get_job_stream)],
 ) -> ChatService:
-    return ChatService(chat_repository=repo, jobs_stream=jobs)
+    return ChatService(chat_repository=repo)
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+JobStreamDep = Annotated[JobStream, Depends(get_job_stream)]
 EventStreamDep = Annotated[EventStream, Depends(get_event_stream)]

@@ -81,7 +81,7 @@ def client(infra):
 @pytest.fixture
 def client_with_worker(infra):
     _setup_app(infra)
-    chat_service = ChatService(chat_repository=infra["repo"], jobs_stream=infra["job_stream"])
+    chat_service = ChatService(chat_repository=infra["repo"])
     worker = Worker(
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,

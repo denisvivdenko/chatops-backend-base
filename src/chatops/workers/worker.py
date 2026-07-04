@@ -95,23 +95,15 @@ class Worker:
 
 
 if __name__ == "__main__":
-    import os
-    import pymongo
-    import redis
-
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    from chatops.stream.job_stream import RedisJobStream
-    from chatops.stream.event_stream import RedisEventStream
-    from chatops.repositories.chat_repository import MongoChatRepository
+    from chatops.api.dependencies import get_event_stream, get_job_stream, get_chat_repository
 
-    redis_client = redis.Redis(host=os.environ["REDIS_HOST"], port=6379, socket_timeout=None)
-    mongo_client = pymongo.MongoClient(os.environ["MONGO_HOST"], 27017)
-    job_stream = RedisJobStream(redis_client)
-    chat_service = ChatService(chat_repository=MongoChatRepository(mongo_client), jobs_stream=job_stream)
+    job_stream = get_job_stream()
+    chat_service = ChatService(chat_repository=get_chat_repository())
 
     Worker(
         jobs_stream=job_stream,
         chat_service=chat_service,
-        event_stream=RedisEventStream(redis_client),
+        event_stream=get_event_stream(),
     ).start().join()
