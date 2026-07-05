@@ -3,6 +3,9 @@
 deploy:
 	docker compose --profile deploy up --build
 
+deploy-without-worker:
+	docker compose --profile deploy-without-worker up --build
+
 build:
 	docker compose build api worker
 	docker image prune -f

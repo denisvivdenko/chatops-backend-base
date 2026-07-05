@@ -1,6 +1,6 @@
 services:
   api:
-    profiles: [deploy]
+    profiles: [deploy, deploy-without-worker]
     image: ${APP_IMAGE:-chatops-backend:latest}
     build: .
     command: python -m chatops.api.main
@@ -30,7 +30,7 @@ services:
         condition: service_healthy
 
   redis:
-    profiles: [deploy, tests]
+    profiles: [deploy, tests, deploy-without-worker]
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -39,7 +39,7 @@ services:
       retries: 10
 
   mongo:
-    profiles: [deploy, tests]
+    profiles: [deploy, tests, deploy-without-worker]
     image: mongo:7
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]

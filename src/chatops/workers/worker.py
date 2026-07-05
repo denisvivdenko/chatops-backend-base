@@ -2,10 +2,10 @@ import logging
 import threading
 import time
 
-from chatops.domain.chat import EOM
+from chatops.domain.chat import EOM, MessageStatus
 from chatops.stream.job_stream import JobStream, AssistantJob
 from chatops.stream.event_stream import EventStream
-from chatops.services.chat_service import ChatService
+from chatops.services.chat_service import ChatService, MessageNotFoundError
 
 HARDCODED_RESPONSE = """
 ## Markdown support
@@ -80,6 +80,16 @@ class Worker:
 
     def _process(self, job: AssistantJob) -> None:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
+        try:
+            message = self._service.get_message(job.chat_id, job.message_id)
+        except MessageNotFoundError:
+            logger.warning("Discarding job chat_id=%s message_id=%s: message not found", job.chat_id, job.message_id)
+            return
+        if message.status != MessageStatus.PENDING:
+            logger.warning(
+                "Discarding job chat_id=%s message_id=%s: status=%s", job.chat_id, job.message_id, message.status,
+            )
+            return
         try:
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
             chunk_size = 6

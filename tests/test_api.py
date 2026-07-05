@@ -119,6 +119,32 @@ def test_assistant_message_marked_failed_when_not_picked_up_by_worker(client):
 
 @pytest.mark.parametrize(
     "settings",
+    [{"message_generation_timeout": 0.5}],
+    indirect=True,
+)
+def test_worker_discards_stale_job_for_message_already_failed_by_timeout(client, request):
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "pending"
+
+    time.sleep(0.6)  # no worker running yet, so this message's job sits stale in the queue
+    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
+
+    other_chat_id = client.post("/api/chats", json={"message": "Other"}).json()["id"]
+    other_assistant_id = client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["id"]
+
+    request.getfixturevalue("worker")  # starts consuming the queue: stale job first, then the fresh one
+
+    with client.stream("GET", f"/api/chats/{other_chat_id}/messages/{other_assistant_id}/stream") as resp:
+        list(resp.iter_lines())
+    assert client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["status"] == "complete"
+
+    stale_message = client.get(f"/api/chats/{chat_id}/messages").json()[1]
+    assert stale_message["status"] == "failed"
+    assert stale_message["content"] == ""
+
+
+@pytest.mark.parametrize(
+    "settings",
     [{"message_generation_timeout": 0.05}],
     indirect=True,
 )

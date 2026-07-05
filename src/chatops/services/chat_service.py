@@ -14,6 +14,10 @@ class MessageNotFailedError(Exception):
     pass
 
 
+class MessageNotFoundError(Exception):
+    pass
+
+
 class ChatService:
     def __init__(self, chat_repository: ChatRepository) -> None:
         self._repo = chat_repository
@@ -93,6 +97,12 @@ class ChatService:
 
     def fetch_messages(self, chat_id: str) -> list[Message]:
         return self._repo.fetch_messages(chat_id)
+
+    def get_message(self, chat_id: str, message_id: str) -> Message:
+        for message in self._repo.fetch_messages(chat_id):
+            if message.id == message_id:
+                return message
+        raise MessageNotFoundError()
 
     def retry_message(self, chat_id: str, message_id: str, jobs_stream: JobStream) -> Message:
         for message in self._repo.fetch_messages(chat_id):
