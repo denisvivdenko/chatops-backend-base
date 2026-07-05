@@ -57,7 +57,8 @@ def fetch_messages(
     service: ChatServiceDep,
     settings: SettingsDep,
 ) -> list[Message]:
-    return service.fetch_messages(chat_id, fail_message_after_timeout=settings.message_generation_timeout)
+    service.fail_stale_pending_messages(chat_id, fail_message_after_timeout=settings.message_generation_timeout)
+    return service.fetch_messages(chat_id)
 
 
 @router.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)

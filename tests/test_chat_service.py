@@ -37,7 +37,7 @@ def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up(in
     service = ChatService(chat_repository=infra["repo"])
     jobs_stream = infra["job_stream"]
     chat = service.create_chat("Hello", jobs_stream)
-    messages = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)
+    messages = service.fetch_messages(chat.id)
 
     assert len(messages) == 2
 
@@ -57,13 +57,33 @@ def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up(in
 def test_fail_message_marks_assistant_message_as_failed(infra) -> None:
     service = ChatService(chat_repository=infra["repo"])
     chat = service.create_chat("Hello", infra["job_stream"])
-    assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+    assistant = service.fetch_messages(chat.id)[1]
 
     service.fail_message(chat.id, assistant.id)
 
-    failed = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+    failed = service.fetch_messages(chat.id)[1]
     assert failed.id == assistant.id
     assert failed.status == MessageStatus.FAILED
+
+
+def test_fail_stale_pending_messages_fails_assistant_message_past_timeout(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("Hello", infra["job_stream"])
+
+    service.fail_stale_pending_messages(chat.id, fail_message_after_timeout=0)
+
+    assistant = service.fetch_messages(chat.id)[1]
+    assert assistant.status == MessageStatus.FAILED
+
+
+def test_fail_stale_pending_messages_leaves_fresh_pending_message_untouched(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("Hello", infra["job_stream"])
+
+    service.fail_stale_pending_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)
+
+    assistant = service.fetch_messages(chat.id)[1]
+    assert assistant.status == MessageStatus.PENDING
 
 
 @pytest.mark.asyncio
@@ -71,7 +91,7 @@ async def test_worker_streams_hardcoded_response(infra, worker) -> None:
     event_stream = infra["event_stream"]
     service = ChatService(chat_repository=infra["repo"])
     chat = service.create_chat("Hello", infra["job_stream"])
-    pending_assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+    pending_assistant = service.fetch_messages(chat.id)[1]
 
     events = [e async for e in MessageObserver(chat.id, pending_assistant.id, event_stream)]
     assert "".join(e.token for e in events) == TEST_RESPONSE
@@ -83,7 +103,7 @@ def test_can_send_next_message_after_assistant_completes(infra) -> None:
     jobs_stream = infra["job_stream"]
     chat = service.create_chat("Hello", jobs_stream)
 
-    assistant = service.fetch_messages(chat.id, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)[1]
+    assistant = service.fetch_messages(chat.id)[1]
     chat_repository.save_message(chat.id, assistant.model_copy(update={"status": MessageStatus.COMPLETE, "content": "Done"}))
 
     response = service.send_message(chat.id, "What is the weather today?", jobs_stream)
