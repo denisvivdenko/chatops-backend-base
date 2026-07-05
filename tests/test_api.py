@@ -117,6 +117,50 @@ def test_assistant_message_marked_failed_when_not_picked_up_by_worker(client):
     assert messages[1]["status"] == "failed"
 
 
+@pytest.mark.parametrize(
+    "settings",
+    [{"message_generation_timeout": 0.05}],
+    indirect=True,
+)
+def test_retry_failed_message_marks_it_pending(client):
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+
+    time.sleep(0.1)
+    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
+
+    response = client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == assistant_id
+    assert body["status"] == "pending"
+
+
+def test_retry_pending_message_is_rejected(client):
+    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+
+    response = client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "message_not_failed"
+
+
+def test_retry_complete_message_is_rejected(client_with_worker):
+    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+
+    with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+        list(resp.iter_lines())
+    assert client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
+
+    response = client_with_worker.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "message_not_failed"
+
+
 # --- SSE streaming ---
 
 

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from chatops.api.dependencies import ChatServiceDep, EventStreamDep, JobStreamDep, SettingsDep
 from chatops.domain.chat import Chat, Message
 from chatops.stream.message_observer import MessageGenerationTimeoutError, MessageObserver
-from chatops.services.chat_service import AssistantMessagePendingError
+from chatops.services.chat_service import AssistantMessagePendingError, MessageNotFailedError
 
 
 class CreateChatRequest(BaseModel):
@@ -72,6 +72,19 @@ def send_message(
         return service.send_message(chat_id, body.content, jobs)
     except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
+
+
+@router.post("/chats/{chat_id}/messages/{message_id}/retry", response_model=Message)
+def retry_message(
+    chat_id: str,
+    message_id: str,
+    service: ChatServiceDep,
+    jobs: JobStreamDep,
+):
+    try:
+        return service.retry_message(chat_id, message_id, jobs)
+    except MessageNotFailedError:
+        return JSONResponse(status_code=409, content={"error": "message_not_failed"})
 
 
 @router.get("/chats/{chat_id}/messages/{message_id}/stream")

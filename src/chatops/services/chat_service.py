@@ -10,6 +10,10 @@ class AssistantMessagePendingError(Exception):
     pass
 
 
+class MessageNotFailedError(Exception):
+    pass
+
+
 class ChatService:
     def __init__(self, chat_repository: ChatRepository) -> None:
         self._repo = chat_repository
@@ -89,3 +93,18 @@ class ChatService:
 
     def fetch_messages(self, chat_id: str) -> list[Message]:
         return self._repo.fetch_messages(chat_id)
+
+    def retry_message(self, chat_id: str, message_id: str, jobs_stream: JobStream) -> Message:
+        for message in self._repo.fetch_messages(chat_id):
+            if message.id != message_id:
+                continue
+            if message.status != MessageStatus.FAILED:
+                raise MessageNotFailedError()
+            retried = message.model_copy(update={
+                "status": MessageStatus.PENDING,
+                "content": "",
+                "created_at": int(time.time() * 1000),
+            })
+            self._repo.save_message(chat_id, retried)
+            jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=message_id))
+            return retried
