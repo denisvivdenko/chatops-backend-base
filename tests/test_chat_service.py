@@ -1,7 +1,7 @@
 import time
 import pytest
 
-from chatops.services.chat_service import ChatService, AssistantMessagePendingError
+from chatops.services.chat_service import ChatService, AssistantMessagePendingError, MessageStatusTransitionError
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.settings import Settings
 from chatops.workers.worker import TEST_RESPONSE
@@ -64,6 +64,20 @@ def test_fail_message_marks_assistant_message_as_failed(infra) -> None:
     failed = service.fetch_messages(chat.id)[1]
     assert failed.id == assistant.id
     assert failed.status == MessageStatus.FAILED
+
+
+def test_complete_message_raises_when_message_not_pending(infra) -> None:
+    service = ChatService(chat_repository=infra["repo"])
+    chat = service.create_chat("Hello", infra["job_stream"])
+    assistant = service.fetch_messages(chat.id)[1]
+    service.fail_message(chat.id, assistant.id)
+
+    with pytest.raises(MessageStatusTransitionError):
+        service.complete_message(chat.id, assistant.id, "some content")
+
+    unchanged = service.fetch_messages(chat.id)[1]
+    assert unchanged.status == MessageStatus.FAILED
+    assert unchanged.content == ""
 
 
 def test_fail_stale_pending_messages_fails_assistant_message_past_timeout(infra) -> None:
