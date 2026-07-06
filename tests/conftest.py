@@ -10,12 +10,16 @@ from chatops.api.dependencies import (
     get_chat_repository,
     get_event_stream,
     get_job_stream,
+    get_refresh_token_repository,
     get_settings,
+    get_user_repository,
 )
 from chatops.settings import Settings
 from chatops.stream.job_stream import RedisJobStream
 from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
+from chatops.repositories.refresh_token_repository import MongoRefreshTokenRepository
+from chatops.repositories.user_repository import MongoUserRepository
 from chatops.services.chat_service import ChatService
 from chatops.workers.worker import Worker, TEST_RESPONSE
 
@@ -52,6 +56,8 @@ def infra(request):
 
     yield dict(
         repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
+        user_repo=MongoUserRepository(mongo_client, db_name=MONGO_TEST_DB),
+        refresh_token_repo=MongoRefreshTokenRepository(mongo_client, db_name=MONGO_TEST_DB),
         redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
         event_stream=RedisEventStream(redis_client),
@@ -77,6 +83,8 @@ def _make_event_stream(infra, settings):
 
 def _setup_app(infra, settings):
     app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
+    app.dependency_overrides[get_user_repository] = lambda: infra["user_repo"]
+    app.dependency_overrides[get_refresh_token_repository] = lambda: infra["refresh_token_repo"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
     app.dependency_overrides[get_event_stream] = lambda: _make_event_stream(infra, settings)
     app.dependency_overrides[get_settings] = lambda: settings
@@ -92,6 +100,13 @@ def client(infra, settings):
     with TestClient(app) as c:
         yield c
     _teardown_app()
+
+
+@pytest.fixture
+def authed_client(client):
+    token = client.post("/api/auth/anonymous-session").json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    yield client
 
 
 @pytest.fixture
@@ -113,3 +128,10 @@ def client_with_worker(infra, settings, worker):
     with TestClient(app) as c:
         yield c
     _teardown_app()
+
+
+@pytest.fixture
+def authed_client_with_worker(client_with_worker):
+    token = client_with_worker.post("/api/auth/anonymous-session").json()["access_token"]
+    client_with_worker.headers["Authorization"] = f"Bearer {token}"
+    yield client_with_worker

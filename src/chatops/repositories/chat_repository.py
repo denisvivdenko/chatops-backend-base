@@ -14,7 +14,7 @@ class ChatRepository(ABC):
     def fetch_chat(self, chat_id: str) -> Chat: ...
 
     @abstractmethod
-    def fetch_chats(self, limit: int | None = None) -> list[Chat]: ...
+    def fetch_chats(self, user_id: str, limit: int | None = None) -> list[Chat]: ...
 
     @abstractmethod
     def save_message(self, chat_id: str, message: Message) -> None: ...
@@ -47,9 +47,10 @@ class InMemoryChatRepository(ChatRepository):
                     return c
             raise KeyError(chat_id)
 
-    def fetch_chats(self, limit: int) -> list[Chat]:
+    def fetch_chats(self, user_id: str, limit: int | None = None) -> list[Chat]:
         with self._lock:
-            sorted_chats = sorted(self._chats, key=lambda c: c.last_activity_at, reverse=True)
+            owned = [c for c in self._chats if c.user_id == user_id]
+            sorted_chats = sorted(owned, key=lambda c: c.last_activity_at, reverse=True)
             return sorted_chats[:limit]
 
     def delete_chat(self, chat_id: str) -> None:
@@ -89,15 +90,21 @@ class MongoChatRepository(ChatRepository):
             raise KeyError(chat_id)
         return self._chat_from_doc(doc)
 
-    def fetch_chats(self, limit: int | None = None) -> list[Chat]:
-        cursor = self._chats.find().sort("last_activity_at", pymongo.DESCENDING)
+    def fetch_chats(self, user_id: str, limit: int | None = None) -> list[Chat]:
+        cursor = self._chats.find({"user_id": user_id}).sort("last_activity_at", pymongo.DESCENDING)
         if limit is not None:
             cursor = cursor.limit(limit)
         return [self._chat_from_doc(doc) for doc in cursor]
 
     @staticmethod
     def _chat_from_doc(doc: dict) -> Chat:
-        return Chat(id=doc["_id"], title=doc["title"], last_activity_at=doc["last_activity_at"], created_at=doc["created_at"])
+        return Chat(
+            id=doc["_id"],
+            user_id=doc["user_id"],
+            title=doc["title"],
+            last_activity_at=doc["last_activity_at"],
+            created_at=doc["created_at"],
+        )
 
     def delete_chat(self, chat_id: str) -> None:
         self._chats.delete_one({"_id": chat_id})

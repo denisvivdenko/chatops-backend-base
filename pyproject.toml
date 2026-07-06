@@ -10,6 +10,7 @@ dependencies = [
     "fastapi[standard]>=0.137.1",
     "httpx2>=2.4.0",
     "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
     "pymongo>=4.17.0",
     "pytest>=9.1.0",
     "pytest-asyncio>=1.4.0",

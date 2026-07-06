@@ -7,8 +7,8 @@ from chatops.workers.worker import TEST_RESPONSE
 
 # --- Chats ---
 
-def test_create_chat(client):
-    response = client.post("/api/chats", json={"message": "Hello"})
+def test_create_chat(authed_client):
+    response = authed_client.post("/api/chats", json={"message": "Hello"})
 
     assert response.status_code == 201
     body = response.json()
@@ -18,53 +18,53 @@ def test_create_chat(client):
     assert "last_activity_at" in body
 
 
-def test_list_chats_sorted_most_recent_first(client_with_worker):
-    chat1_id = client_with_worker.post("/api/chats", json={"message": "First"}).json()["id"]
-    chat2_id = client_with_worker.post("/api/chats", json={"message": "Second"}).json()["id"]
+def test_list_chats_sorted_most_recent_first(authed_client_with_worker):
+    chat1_id = authed_client_with_worker.post("/api/chats", json={"message": "First"}).json()["id"]
+    chat2_id = authed_client_with_worker.post("/api/chats", json={"message": "Second"}).json()["id"]
 
     # drain SSE for both so their assistants are complete and we can send follow-ups
     for chat_id in [chat1_id, chat2_id]:
-        assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-        with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+        assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+        with authed_client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
             list(resp.iter_lines())
 
     # chat2 is currently first (created more recently)
-    chats = client_with_worker.get("/api/chats?limit=10").json()
+    chats = authed_client_with_worker.get("/api/chats?limit=10").json()
     assert chats[0]["id"] == chat2_id
 
     # sending a message to chat1 (currently last) should bump it to the top
-    client_with_worker.post(f"/api/chats/{chat1_id}/messages", json={"content": "Follow up"})
+    authed_client_with_worker.post(f"/api/chats/{chat1_id}/messages", json={"content": "Follow up"})
 
-    chats = client_with_worker.get("/api/chats?limit=10").json()
+    chats = authed_client_with_worker.get("/api/chats?limit=10").json()
     assert chats[0]["id"] == chat1_id
 
 
-def test_list_chats_respects_limit(client):
+def test_list_chats_respects_limit(authed_client):
     for i in range(3):
-        client.post("/api/chats", json={"message": f"Message {i}"})
+        authed_client.post("/api/chats", json={"message": f"Message {i}"})
 
-    response = client.get("/api/chats?limit=2")
+    response = authed_client.get("/api/chats?limit=2")
 
     assert response.status_code == 200
     assert len(response.json()) == 2
 
 
-def test_delete_chat(client):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+def test_delete_chat(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
-    response = client.delete(f"/api/chats/{chat_id}")
+    response = authed_client.delete(f"/api/chats/{chat_id}")
 
     assert response.status_code == 204
-    chats = client.get("/api/chats?limit=10").json()
+    chats = authed_client.get("/api/chats?limit=10").json()
     assert all(c["id"] != chat_id for c in chats)
 
 
 # --- Messages ---
 
-def test_fetch_messages_after_create_chat(client):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+def test_fetch_messages_after_create_chat(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
-    response = client.get(f"/api/chats/{chat_id}/messages")
+    response = authed_client.get(f"/api/chats/{chat_id}/messages")
 
     assert response.status_code == 200
     messages = response.json()
@@ -79,22 +79,22 @@ def test_fetch_messages_after_create_chat(client):
     assert "id" in messages[1]
 
 
-def test_send_message_lifecycle(client_with_worker):
-    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    first_assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+def test_send_message_lifecycle(authed_client_with_worker):
+    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    first_assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
-    pending_response = client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "Follow up"})
+    pending_response = authed_client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "Follow up"})
     assert pending_response.status_code == 409
     assert pending_response.json()["error"] == "last_assistant_message_not_finished"
 
-    with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
+    with authed_client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{first_assistant_id}/stream") as resp:
         list(resp.iter_lines())
 
-    messages = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()
+    messages = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == TEST_RESPONSE
 
-    follow_up = client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "What is the weather?"})
+    follow_up = authed_client_with_worker.post(f"/api/chats/{chat_id}/messages", json={"content": "What is the weather?"})
     assert follow_up.status_code == 201
     assert follow_up.json()["role"] == "assistant"
     assert follow_up.json()["status"] == "pending"
@@ -105,15 +105,15 @@ def test_send_message_lifecycle(client_with_worker):
     [{"message_generation_timeout": 0.05}],
     indirect=True,
 )
-def test_assistant_message_marked_failed_when_not_picked_up_by_worker(client):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+def test_assistant_message_marked_failed_when_not_picked_up_by_worker(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
-    messages = client.get(f"/api/chats/{chat_id}/messages").json()
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "pending"
 
     time.sleep(0.1)
 
-    messages = client.get(f"/api/chats/{chat_id}/messages").json()
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "failed"
 
 
@@ -122,23 +122,23 @@ def test_assistant_message_marked_failed_when_not_picked_up_by_worker(client):
     [{"message_generation_timeout": 0.5}],
     indirect=True,
 )
-def test_worker_discards_stale_job_for_message_already_failed_by_timeout(client, request):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "pending"
+def test_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, request):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "pending"
 
     time.sleep(0.6)  # no worker running yet, so this message's job sits stale in the queue
-    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
+    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
-    other_chat_id = client.post("/api/chats", json={"message": "Other"}).json()["id"]
-    other_assistant_id = client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["id"]
+    other_chat_id = authed_client.post("/api/chats", json={"message": "Other"}).json()["id"]
+    other_assistant_id = authed_client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["id"]
 
     request.getfixturevalue("worker")  # starts consuming the queue: stale job first, then the fresh one
 
-    with client.stream("GET", f"/api/chats/{other_chat_id}/messages/{other_assistant_id}/stream") as resp:
+    with authed_client.stream("GET", f"/api/chats/{other_chat_id}/messages/{other_assistant_id}/stream") as resp:
         list(resp.iter_lines())
-    assert client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["status"] == "complete"
+    assert authed_client.get(f"/api/chats/{other_chat_id}/messages").json()[1]["status"] == "complete"
 
-    stale_message = client.get(f"/api/chats/{chat_id}/messages").json()[1]
+    stale_message = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]
     assert stale_message["status"] == "failed"
     assert stale_message["content"] == ""
 
@@ -148,14 +148,14 @@ def test_worker_discards_stale_job_for_message_already_failed_by_timeout(client,
     [{"message_generation_timeout": 0.05}],
     indirect=True,
 )
-def test_retry_failed_message_marks_it_pending(client):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+def test_retry_failed_message_marks_it_pending(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
     time.sleep(0.1)
-    assert client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
+    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
-    response = client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+    response = authed_client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
 
     assert response.status_code == 200
     body = response.json()
@@ -163,25 +163,25 @@ def test_retry_failed_message_marks_it_pending(client):
     assert body["status"] == "pending"
 
 
-def test_retry_pending_message_is_rejected(client):
-    chat_id = client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+def test_retry_pending_message_is_rejected(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
-    response = client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+    response = authed_client.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
 
     assert response.status_code == 409
     assert response.json()["error"] == "message_not_failed"
 
 
-def test_retry_complete_message_is_rejected(client_with_worker):
-    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+def test_retry_complete_message_is_rejected(authed_client_with_worker):
+    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
-    with client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+    with authed_client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
         list(resp.iter_lines())
-    assert client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
+    assert authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
 
-    response = client_with_worker.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
+    response = authed_client_with_worker.post(f"/api/chats/{chat_id}/messages/{assistant_id}/retry")
 
     assert response.status_code == 409
     assert response.json()["error"] == "message_not_failed"
@@ -190,7 +190,7 @@ def test_retry_complete_message_is_rejected(client_with_worker):
 # --- SSE streaming ---
 
 
-def test_stream_assistant_response(client_with_worker):
+def test_stream_assistant_response(authed_client_with_worker):
 
     def _collect_events(lines, limit=None):
         events = []
@@ -201,18 +201,18 @@ def test_stream_assistant_response(client_with_worker):
                     break
         return events
 
-    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
-    with client_with_worker.stream("GET", url) as first_resp:
+    with authed_client_with_worker.stream("GET", url) as first_resp:
         assert first_resp.status_code == 200
         assert first_resp.headers["content-type"] == "text/event-stream; charset=utf-8"
         first_iter = first_resp.iter_lines()
 
         first_events = _collect_events(first_iter, limit=3)
 
-        with client_with_worker.stream("GET", url) as second_resp:
+        with authed_client_with_worker.stream("GET", url) as second_resp:
             second_events = _collect_events(second_resp.iter_lines())
 
         first_events += _collect_events(first_iter)
@@ -227,10 +227,10 @@ def test_stream_assistant_response(client_with_worker):
     [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.2}],
     indirect=True,
 )
-def test_stream_emits_error_event_when_generation_times_out(client):
+def test_stream_emits_error_event_when_generation_times_out(authed_client):
     url = "/api/chats/nonexistent-chat/messages/nonexistent-message/stream"
 
-    with client.stream("GET", url) as response:
+    with authed_client.stream("GET", url) as response:
         assert response.status_code == 200
         lines = list(response.iter_lines())
 
@@ -244,18 +244,18 @@ def test_stream_emits_error_event_when_generation_times_out(client):
     [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.3}],
     indirect=True,
 )
-def test_reopening_stream_after_generation_timeout_receives_error(client_with_worker):
-    chat_id = client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+def test_reopening_stream_after_generation_timeout_receives_error(authed_client_with_worker):
+    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
-    with client_with_worker.stream("GET", url) as first_resp:
+    with authed_client_with_worker.stream("GET", url) as first_resp:
         first_line = next(line for line in first_resp.iter_lines() if line.startswith("data: "))
     assert json.loads(first_line.removeprefix("data: "))["token"]
 
     time.sleep(0.4)
 
-    with client_with_worker.stream("GET", url) as second_resp:
+    with authed_client_with_worker.stream("GET", url) as second_resp:
         lines = list(second_resp.iter_lines())
 
     assert "event: error" in lines

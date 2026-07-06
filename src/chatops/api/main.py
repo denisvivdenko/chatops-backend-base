@@ -9,10 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from chatops.api.dependencies import ChatServiceDep, EventStreamDep, JobStreamDep, SettingsDep
+from chatops.api.auth import router as auth_router
+from chatops.api.dependencies import ChatServiceDep, CurrentUserIdDep, EventStreamDep, JobStreamDep, SettingsDep
 from chatops.domain.chat import Chat, Message
 from chatops.stream.message_observer import MessageGenerationTimeoutError, MessageObserver
-from chatops.services.chat_service import AssistantMessagePendingError, MessageNotFailedError
+from chatops.services.chat_service import AssistantMessagePendingError, ChatAccessDeniedError, MessageNotFailedError
 
 
 class CreateChatRequest(BaseModel):
@@ -29,9 +30,10 @@ router = APIRouter(prefix="/api")
 @router.get("/chats", response_model=list[Chat])
 def fetch_chats(
     service: ChatServiceDep,
+    user_id: CurrentUserIdDep,
     limit: int = Query(default=10, ge=1),
 ) -> list[Chat]:
-    return service.fetch_chats(limit=limit)
+    return service.fetch_chats(user_id, limit=limit)
 
 
 @router.post("/chats", status_code=201, response_model=Chat)
@@ -39,16 +41,21 @@ def create_chat(
     body: CreateChatRequest,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    user_id: CurrentUserIdDep,
 ) -> Chat:
-    return service.create_chat(body.message, jobs)
+    return service.create_chat(body.message, jobs, user_id)
 
 
 @router.delete("/chats/{chat_id}", status_code=204)
 def delete_chat(
     chat_id: str,
     service: ChatServiceDep,
-) -> None:
-    service.delete_chat(chat_id)
+    user_id: CurrentUserIdDep,
+):
+    try:
+        service.delete_chat(chat_id, user_id)
+    except ChatAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.get("/chats/{chat_id}/messages", response_model=list[Message])
@@ -56,9 +63,13 @@ def fetch_messages(
     chat_id: str,
     service: ChatServiceDep,
     settings: SettingsDep,
-) -> list[Message]:
-    service.fail_stale_pending_messages(chat_id, fail_message_after_timeout=settings.message_generation_timeout)
-    return service.fetch_messages(chat_id)
+    user_id: CurrentUserIdDep,
+):
+    try:
+        service.fail_stale_pending_messages(chat_id, user_id, fail_message_after_timeout=settings.message_generation_timeout)
+        return service.fetch_messages(chat_id, user_id)
+    except ChatAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
@@ -67,11 +78,14 @@ def send_message(
     body: SendMessageRequest,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    user_id: CurrentUserIdDep,
 ):
     try:
-        return service.send_message(chat_id, body.content, jobs)
+        return service.send_message(chat_id, body.content, jobs, user_id)
     except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
+    except ChatAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.post("/chats/{chat_id}/messages/{message_id}/retry", response_model=Message)
@@ -80,11 +94,14 @@ def retry_message(
     message_id: str,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    user_id: CurrentUserIdDep,
 ):
     try:
-        return service.retry_message(chat_id, message_id, jobs)
+        return service.retry_message(chat_id, message_id, jobs, user_id)
     except MessageNotFailedError:
         return JSONResponse(status_code=409, content={"error": "message_not_failed"})
+    except ChatAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.get("/chats/{chat_id}/messages/{message_id}/stream")
@@ -93,6 +110,7 @@ def stream_message(
     message_id: str,
     event_stream: EventStreamDep,
     settings: SettingsDep,
+    user_id: CurrentUserIdDep,
 ) -> StreamingResponse:
     observer = MessageObserver(
         chat_id, message_id, event_stream, timeout=settings.message_generation_timeout
@@ -117,6 +135,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(auth_router)
 
 
 if __name__ == "__main__":

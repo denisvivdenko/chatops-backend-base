@@ -22,6 +22,10 @@ class MessageStatusTransitionError(Exception):
     pass
 
 
+class ChatAccessDeniedError(Exception):
+    pass
+
+
 ALLOWED_MESSAGE_STATUS_TRANSITIONS: dict[MessageStatus, set[MessageStatus]] = {
     MessageStatus.PENDING: {MessageStatus.COMPLETE, MessageStatus.FAILED},
     MessageStatus.COMPLETE: set(),
@@ -33,19 +37,21 @@ class ChatService:
     def __init__(self, chat_repository: ChatRepository) -> None:
         self._repo = chat_repository
 
-    def create_chat(self, first_message: str, jobs_stream: JobStream) -> Chat:
+    def create_chat(self, first_message: str, jobs_stream: JobStream, user_id: str) -> Chat:
         now = int(time.time() * 1000)
         chat = Chat(
             id=str(uuid.uuid4()),
+            user_id=user_id,
             title=first_message[:50],
             last_activity_at=now,
             created_at=now,
         )
         self._repo.save_chat(chat)
-        self.send_message(chat.id, first_message, jobs_stream)
+        self.send_message(chat.id, first_message, jobs_stream, user_id)
         return chat
 
-    def send_message(self, chat_id: str, content: str, jobs_stream: JobStream) -> Message:
+    def send_message(self, chat_id: str, content: str, jobs_stream: JobStream, user_id: str) -> Message:
+        self._assert_owns_chat(chat_id, user_id)
         messages = self._repo.fetch_messages(chat_id)
         if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
             raise AssistantMessagePendingError()
@@ -73,6 +79,11 @@ class ChatService:
         jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=assistant_message.id))
         return assistant_message
 
+    def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
+        chat = self._repo.fetch_chat(chat_id)
+        if chat.user_id != user_id:
+            raise ChatAccessDeniedError()
+
     def complete_message(self, chat_id: str, message_id: str, content: str) -> None:
         self._transition_message_status(chat_id, message_id, MessageStatus.COMPLETE, content=content)
 
@@ -92,15 +103,16 @@ class ChatService:
             update["content"] = content
         self._repo.save_message(chat_id, message.model_copy(update=update))
 
-    def fetch_chats(self, limit: int) -> list[Chat]:
-        return self._repo.fetch_chats(limit)
+    def fetch_chats(self, user_id: str, limit: int) -> list[Chat]:
+        return self._repo.fetch_chats(user_id, limit)
 
-    def delete_chat(self, chat_id: str) -> None:
+    def delete_chat(self, chat_id: str, user_id: str) -> None:
+        self._assert_owns_chat(chat_id, user_id)
         self._repo.delete_chat(chat_id)
 
-    def fail_stale_pending_messages(self, chat_id: str, fail_message_after_timeout: float) -> None:
+    def fail_stale_pending_messages(self, chat_id: str, user_id: str, fail_message_after_timeout: float) -> None:
         now = int(time.time() * 1000)
-        for message in self._repo.fetch_messages(chat_id):
+        for message in self.fetch_messages(chat_id, user_id):
             if (
                 message.role == MessageRole.ASSISTANT
                 and message.status == MessageStatus.PENDING
@@ -108,7 +120,8 @@ class ChatService:
             ):
                 self.fail_message(chat_id, message.id)
 
-    def fetch_messages(self, chat_id: str) -> list[Message]:
+    def fetch_messages(self, chat_id: str, user_id: str) -> list[Message]:
+        self._assert_owns_chat(chat_id, user_id)
         return self._repo.fetch_messages(chat_id)
 
     def get_message(self, chat_id: str, message_id: str) -> Message:
@@ -117,7 +130,8 @@ class ChatService:
                 return message
         raise MessageNotFoundError()
 
-    def retry_message(self, chat_id: str, message_id: str, jobs_stream: JobStream) -> Message:
+    def retry_message(self, chat_id: str, message_id: str, jobs_stream: JobStream, user_id: str) -> Message:
+        self._assert_owns_chat(chat_id, user_id)
         for message in self._repo.fetch_messages(chat_id):
             if message.id != message_id:
                 continue
