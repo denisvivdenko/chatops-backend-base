@@ -48,3 +48,16 @@ def test_user_cannot_delete_another_users_chat(client):
     assert response.status_code == 403
     remaining = client.get("/api/chats", headers=auth_headers(token_a)).json()
     assert any(c["id"] == chat_id for c in remaining)
+
+
+def test_user_cannot_stream_another_users_message(client):
+    token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
+    chat_id = client.post("/api/chats", json={"message": "Hello"}, headers=auth_headers(token_a)).json()["id"]
+    assistant_id = client.get(f"/api/chats/{chat_id}/messages", headers=auth_headers(token_a)).json()[1]["id"]
+
+    response = client.get(
+        f"/api/chats/{chat_id}/messages/{assistant_id}/stream", headers=auth_headers(token_b)
+    )
+
+    assert response.status_code == 403

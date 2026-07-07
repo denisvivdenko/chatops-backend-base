@@ -33,3 +33,19 @@ def test_retry_nonexistent_message_returns_404(authed_client):
 
     assert response.status_code == 404
     assert response.json()["error"] == "message_not_found"
+
+
+def test_stream_for_nonexistent_chat_returns_404(authed_client):
+    response = authed_client.get("/api/chats/nonexistent-chat/messages/nonexistent-message/stream")
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "chat_not_found"
+
+
+def test_stream_for_nonexistent_message_returns_404(authed_client):
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+
+    response = authed_client.get(f"/api/chats/{chat_id}/messages/nonexistent-message/stream")
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "message_not_found"

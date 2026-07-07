@@ -43,7 +43,9 @@ def test_stream_assistant_response(authed_client_with_worker):
     indirect=True,
 )
 def test_stream_emits_error_event_when_generation_times_out(authed_client):
-    url = "/api/chats/nonexistent-chat/messages/nonexistent-message/stream"
+    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
     with authed_client.stream("GET", url) as response:
         assert response.status_code == 200

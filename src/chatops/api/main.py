@@ -124,10 +124,20 @@ def retry_message(
 def stream_message(
     chat_id: str,
     message_id: str,
+    service: ChatServiceDep,
     event_stream: EventStreamDep,
     settings: SettingsDep,
     user_id: CurrentUserIdDep,
-) -> StreamingResponse:
+):
+    try:
+        service.get_message(chat_id, user_id, message_id)
+    except ChatAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
+    except ChatNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "chat_not_found"})
+    except MessageNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "message_not_found"})
+
     observer = MessageObserver(
         chat_id, message_id, event_stream, timeout=settings.message_generation_timeout
     )
