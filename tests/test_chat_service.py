@@ -60,7 +60,7 @@ def test_fail_message_marks_assistant_message_as_failed(infra) -> None:
     chat = service.create_chat("Hello", infra["job_stream"], USER_ID)
     assistant = service.fetch_messages(chat.id, USER_ID)[1]
 
-    service.fail_message(chat.id, assistant.id)
+    service.fail_message(chat.id, USER_ID, assistant.id)
 
     failed = service.fetch_messages(chat.id, USER_ID)[1]
     assert failed.id == assistant.id
@@ -71,10 +71,10 @@ def test_complete_message_raises_when_message_not_pending(infra) -> None:
     service = ChatService(chat_repository=infra["repo"])
     chat = service.create_chat("Hello", infra["job_stream"], USER_ID)
     assistant = service.fetch_messages(chat.id, USER_ID)[1]
-    service.fail_message(chat.id, assistant.id)
+    service.fail_message(chat.id, USER_ID, assistant.id)
 
     with pytest.raises(MessageStatusTransitionError):
-        service.complete_message(chat.id, assistant.id, "some content")
+        service.complete_message(chat.id, USER_ID, assistant.id, "some content")
 
     unchanged = service.fetch_messages(chat.id, USER_ID)[1]
     assert unchanged.status == MessageStatus.FAILED

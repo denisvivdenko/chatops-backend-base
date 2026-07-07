@@ -5,7 +5,7 @@ import time
 from chatops.domain.chat import EOM, MessageStatus
 from chatops.stream.job_stream import JobStream, AssistantJob
 from chatops.stream.event_stream import EventStream
-from chatops.services.chat_service import ChatService, MessageNotFoundError
+from chatops.services.chat_service import ChatAccessDeniedError, ChatService, MessageNotFoundError
 
 HARDCODED_RESPONSE = """
 ## Markdown support
@@ -81,8 +81,8 @@ class Worker:
     def _process(self, job: AssistantJob) -> None:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         try:
-            message = self._service.get_message(job.chat_id, job.message_id)
-        except MessageNotFoundError:
+            message = self._service.get_message(job.chat_id, job.user_id, job.message_id)
+        except (MessageNotFoundError, ChatAccessDeniedError, KeyError):
             logger.warning("Discarding job chat_id=%s message_id=%s: message not found", job.chat_id, job.message_id)
             return
         if message.status != MessageStatus.PENDING:
@@ -96,12 +96,12 @@ class Worker:
             for i in range(0, len(self._response), chunk_size):
                 self._event_stream.write(stream_key, {"token": self._response[i:i + chunk_size]})
                 time.sleep(0.1)
-            self._service.complete_message(job.chat_id, job.message_id, self._response)
+            self._service.complete_message(job.chat_id, job.user_id, job.message_id, self._response)
             self._event_stream.write(stream_key, {"token": EOM})
             logger.info("Finished job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         except Exception:
             logger.exception("Failed job chat_id=%s message_id=%s", job.chat_id, job.message_id)
-            self._service.fail_message(job.chat_id, job.message_id)
+            self._service.fail_message(job.chat_id, job.user_id, job.message_id)
 
 
 if __name__ == "__main__":

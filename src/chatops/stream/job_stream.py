@@ -8,6 +8,7 @@ import redis
 
 class AssistantJob(NamedTuple):
     chat_id: str
+    user_id: str
     message_id: str
 
 

@@ -76,14 +76,14 @@ class ChatService:
         )
         self._repo.save_message(chat_id, user_message)
         self._repo.save_message(chat_id, assistant_message)
-        jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=assistant_message.id))
+        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
         return assistant_message
 
-    def complete_message(self, chat_id: str, message_id: str, content: str) -> None:
-        self._transition_message_status(chat_id, message_id, MessageStatus.COMPLETE, content=content)
+    def complete_message(self, chat_id: str, user_id: str, message_id: str, content: str) -> None:
+        self._transition_message_status(chat_id, user_id, message_id, MessageStatus.COMPLETE, content=content)
 
-    def fail_message(self, chat_id: str, message_id: str) -> None:
-        self._transition_message_status(chat_id, message_id, MessageStatus.FAILED)
+    def fail_message(self, chat_id: str, user_id: str, message_id: str) -> None:
+        self._transition_message_status(chat_id, user_id, message_id, MessageStatus.FAILED)
 
     def fetch_chats(self, user_id: str, limit: int) -> list[Chat]:
         return self._repo.fetch_chats(user_id, limit)
@@ -100,13 +100,14 @@ class ChatService:
                 and message.status == MessageStatus.PENDING
                 and now - message.created_at > fail_message_after_timeout * 1000
             ):
-                self.fail_message(chat_id, message.id)
+                self.fail_message(chat_id, user_id, message.id)
 
     def fetch_messages(self, chat_id: str, user_id: str) -> list[Message]:
         self._assert_owns_chat(chat_id, user_id)
         return self._repo.fetch_messages(chat_id)
 
-    def get_message(self, chat_id: str, message_id: str) -> Message:
+    def get_message(self, chat_id: str, user_id: str, message_id: str) -> Message:
+        self._assert_owns_chat(chat_id, user_id)
         for message in self._repo.fetch_messages(chat_id):
             if message.id == message_id:
                 return message
@@ -125,7 +126,7 @@ class ChatService:
                 "created_at": int(time.time() * 1000),
             })
             self._repo.save_message(chat_id, retried)
-            jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=message_id))
+            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
             return retried
 
     def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
@@ -134,9 +135,9 @@ class ChatService:
             raise ChatAccessDeniedError()
 
     def _transition_message_status(
-        self, chat_id: str, message_id: str, status: MessageStatus, content: str | None = None,
+        self, chat_id: str, user_id: str, message_id: str, status: MessageStatus, content: str | None = None,
     ) -> None:
-        message = self.get_message(chat_id, message_id)
+        message = self.get_message(chat_id, user_id, message_id)
         if status not in ALLOWED_MESSAGE_STATUS_TRANSITIONS[message.status]:
             raise MessageStatusTransitionError(
                 f"Failed to change message status from {message.status} to {status}"
