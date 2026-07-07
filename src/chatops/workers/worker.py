@@ -5,7 +5,7 @@ import time
 from chatops.domain.chat import EOM, MessageStatus
 from chatops.stream.job_stream import JobStream, AssistantJob
 from chatops.stream.event_stream import EventStream
-from chatops.services.chat_service import ChatAccessDeniedError, ChatService, MessageNotFoundError
+from chatops.services.chat_service import ChatAccessDeniedError, ChatNotFoundError, ChatService, MessageNotFoundError
 
 HARDCODED_RESPONSE = """
 ## Markdown support
@@ -82,7 +82,7 @@ class Worker:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         try:
             message = self._service.get_message(job.chat_id, job.user_id, job.message_id)
-        except (MessageNotFoundError, ChatAccessDeniedError, KeyError):
+        except (MessageNotFoundError, ChatAccessDeniedError, ChatNotFoundError):
             logger.warning("Discarding job chat_id=%s message_id=%s: message not found", job.chat_id, job.message_id)
             return
         if message.status != MessageStatus.PENDING:

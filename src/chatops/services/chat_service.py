@@ -26,6 +26,10 @@ class ChatAccessDeniedError(Exception):
     pass
 
 
+class ChatNotFoundError(Exception):
+    pass
+
+
 ALLOWED_MESSAGE_STATUS_TRANSITIONS: dict[MessageStatus, set[MessageStatus]] = {
     MessageStatus.PENDING: {MessageStatus.COMPLETE, MessageStatus.FAILED},
     MessageStatus.COMPLETE: set(),
@@ -114,23 +118,23 @@ class ChatService:
         raise MessageNotFoundError()
 
     def retry_message(self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream) -> Message:
-        self._assert_owns_chat(chat_id, user_id)
-        for message in self._repo.fetch_messages(chat_id):
-            if message.id != message_id:
-                continue
-            if message.status != MessageStatus.FAILED:
-                raise MessageNotFailedError()
-            retried = message.model_copy(update={
-                "status": MessageStatus.PENDING,
-                "content": "",
-                "created_at": int(time.time() * 1000),
-            })
-            self._repo.save_message(chat_id, retried)
-            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
-            return retried
+        message = self.get_message(chat_id, user_id, message_id)
+        if message.status != MessageStatus.FAILED:
+            raise MessageNotFailedError()
+        retried = message.model_copy(update={
+            "status": MessageStatus.PENDING,
+            "content": "",
+            "created_at": int(time.time() * 1000),
+        })
+        self._repo.save_message(chat_id, retried)
+        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
+        return retried
 
     def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
-        chat = self._repo.fetch_chat(chat_id)
+        try:
+            chat = self._repo.fetch_chat(chat_id)
+        except KeyError:
+            raise ChatNotFoundError()
         if chat.user_id != user_id:
             raise ChatAccessDeniedError()
 

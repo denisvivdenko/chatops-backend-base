@@ -13,7 +13,13 @@ from chatops.api.auth import router as auth_router
 from chatops.api.dependencies import ChatServiceDep, CurrentUserIdDep, EventStreamDep, JobStreamDep, SettingsDep
 from chatops.domain.chat import Chat, Message
 from chatops.stream.message_observer import MessageGenerationTimeoutError, MessageObserver
-from chatops.services.chat_service import AssistantMessagePendingError, ChatAccessDeniedError, MessageNotFailedError
+from chatops.services.chat_service import (
+    AssistantMessagePendingError,
+    ChatAccessDeniedError,
+    ChatNotFoundError,
+    MessageNotFailedError,
+    MessageNotFoundError,
+)
 
 
 class CreateChatRequest(BaseModel):
@@ -56,6 +62,8 @@ def delete_chat(
         service.delete_chat(chat_id, user_id)
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
+    except ChatNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "chat_not_found"})
 
 
 @router.get("/chats/{chat_id}/messages", response_model=list[Message])
@@ -70,6 +78,8 @@ def fetch_messages(
         return service.fetch_messages(chat_id, user_id)
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
+    except ChatNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "chat_not_found"})
 
 
 @router.post("/chats/{chat_id}/messages", status_code=201, response_model=Message)
@@ -86,6 +96,8 @@ def send_message(
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
+    except ChatNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "chat_not_found"})
 
 
 @router.post("/chats/{chat_id}/messages/{message_id}/retry", response_model=Message)
@@ -102,6 +114,10 @@ def retry_message(
         return JSONResponse(status_code=409, content={"error": "message_not_failed"})
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
+    except ChatNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "chat_not_found"})
+    except MessageNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "message_not_found"})
 
 
 @router.get("/chats/{chat_id}/messages/{message_id}/stream")
