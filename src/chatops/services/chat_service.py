@@ -47,10 +47,10 @@ class ChatService:
             created_at=now,
         )
         self._repo.save_chat(chat)
-        self.send_message(chat.id, first_message, jobs_stream, user_id)
+        self.send_message(chat.id, user_id, first_message, jobs_stream)
         return chat
 
-    def send_message(self, chat_id: str, content: str, jobs_stream: JobStream, user_id: str) -> Message:
+    def send_message(self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream) -> Message:
         self._assert_owns_chat(chat_id, user_id)
         messages = self._repo.fetch_messages(chat_id)
         if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
@@ -79,29 +79,11 @@ class ChatService:
         jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=assistant_message.id))
         return assistant_message
 
-    def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
-        chat = self._repo.fetch_chat(chat_id)
-        if chat.user_id != user_id:
-            raise ChatAccessDeniedError()
-
     def complete_message(self, chat_id: str, message_id: str, content: str) -> None:
         self._transition_message_status(chat_id, message_id, MessageStatus.COMPLETE, content=content)
 
     def fail_message(self, chat_id: str, message_id: str) -> None:
         self._transition_message_status(chat_id, message_id, MessageStatus.FAILED)
-
-    def _transition_message_status(
-        self, chat_id: str, message_id: str, status: MessageStatus, content: str | None = None,
-    ) -> None:
-        message = self.get_message(chat_id, message_id)
-        if status not in ALLOWED_MESSAGE_STATUS_TRANSITIONS[message.status]:
-            raise MessageStatusTransitionError(
-                f"Failed to change message status from {message.status} to {status}"
-            )
-        update = {"status": status}
-        if content is not None:
-            update["content"] = content
-        self._repo.save_message(chat_id, message.model_copy(update=update))
 
     def fetch_chats(self, user_id: str, limit: int) -> list[Chat]:
         return self._repo.fetch_chats(user_id, limit)
@@ -130,7 +112,7 @@ class ChatService:
                 return message
         raise MessageNotFoundError()
 
-    def retry_message(self, chat_id: str, message_id: str, jobs_stream: JobStream, user_id: str) -> Message:
+    def retry_message(self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream) -> Message:
         self._assert_owns_chat(chat_id, user_id)
         for message in self._repo.fetch_messages(chat_id):
             if message.id != message_id:
@@ -145,3 +127,21 @@ class ChatService:
             self._repo.save_message(chat_id, retried)
             jobs_stream.publish(AssistantJob(chat_id=chat_id, message_id=message_id))
             return retried
+
+    def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
+        chat = self._repo.fetch_chat(chat_id)
+        if chat.user_id != user_id:
+            raise ChatAccessDeniedError()
+
+    def _transition_message_status(
+        self, chat_id: str, message_id: str, status: MessageStatus, content: str | None = None,
+    ) -> None:
+        message = self.get_message(chat_id, message_id)
+        if status not in ALLOWED_MESSAGE_STATUS_TRANSITIONS[message.status]:
+            raise MessageStatusTransitionError(
+                f"Failed to change message status from {message.status} to {status}"
+            )
+        update = {"status": status}
+        if content is not None:
+            update["content"] = content
+        self._repo.save_message(chat_id, message.model_copy(update=update))

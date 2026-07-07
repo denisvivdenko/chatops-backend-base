@@ -52,7 +52,7 @@ def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up(in
     assert assistant_message.status == MessageStatus.PENDING
 
     with pytest.raises(AssistantMessagePendingError):
-        service.send_message(chat.id, "What is the weather today?", jobs_stream, USER_ID)
+        service.send_message(chat.id, USER_ID, "What is the weather today?", jobs_stream)
 
 
 def test_fail_message_marks_assistant_message_as_failed(infra) -> None:
@@ -121,6 +121,6 @@ def test_can_send_next_message_after_assistant_completes(infra) -> None:
     assistant = service.fetch_messages(chat.id, USER_ID)[1]
     chat_repository.save_message(chat.id, assistant.model_copy(update={"status": MessageStatus.COMPLETE, "content": "Done"}))
 
-    response = service.send_message(chat.id, "What is the weather today?", jobs_stream, USER_ID)
+    response = service.send_message(chat.id, USER_ID, "What is the weather today?", jobs_stream)
     assert response.role == MessageRole.ASSISTANT
     assert response.status == MessageStatus.PENDING

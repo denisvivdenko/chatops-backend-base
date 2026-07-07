@@ -81,7 +81,7 @@ def send_message(
     user_id: CurrentUserIdDep,
 ):
     try:
-        return service.send_message(chat_id, body.content, jobs, user_id)
+        return service.send_message(chat_id, user_id, body.content, jobs)
     except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
     except ChatAccessDeniedError:
@@ -97,7 +97,7 @@ def retry_message(
     user_id: CurrentUserIdDep,
 ):
     try:
-        return service.retry_message(chat_id, message_id, jobs, user_id)
+        return service.retry_message(chat_id, user_id, message_id, jobs)
     except MessageNotFailedError:
         return JSONResponse(status_code=409, content={"error": "message_not_failed"})
     except ChatAccessDeniedError:
