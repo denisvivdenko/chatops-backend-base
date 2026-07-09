@@ -18,6 +18,10 @@ class MessageNotFoundError(Exception):
     pass
 
 
+class CannotModifyAssistantMessageError(Exception):
+    pass
+
+
 class MessageStatusTransitionError(Exception):
     pass
 
@@ -129,6 +133,40 @@ class ChatService:
         self._repo.save_message(chat_id, retried)
         jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
         return retried
+
+    def modify_message(
+        self, chat_id: str, user_id: str, message_id: str, content: str, jobs_stream: JobStream,
+    ) -> Message:
+        self._assert_owns_chat(chat_id, user_id)
+        messages = self._repo.fetch_messages(chat_id)
+
+        target_index = next((i for i, m in enumerate(messages) if m.id == message_id), None)
+        if target_index is None:
+            raise MessageNotFoundError()
+        target = messages[target_index]
+        if target.role != MessageRole.USER:
+            raise CannotModifyAssistantMessageError()
+        if messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
+            raise AssistantMessagePendingError()
+
+        for stale in messages[target_index + 1:]:
+            self._repo.delete_message(chat_id, stale.id)
+        self._repo.save_message(chat_id, target.model_copy(update={"content": content}))
+
+        now = int(time.time() * 1000)
+        chat = self._repo.fetch_chat(chat_id)
+        self._repo.save_chat(chat.model_copy(update={"last_activity_at": now}))
+
+        assistant_message = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.ASSISTANT,
+            status=MessageStatus.PENDING,
+            content="",
+            created_at=now,
+        )
+        self._repo.save_message(chat_id, assistant_message)
+        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
+        return assistant_message
 
     def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
         try:

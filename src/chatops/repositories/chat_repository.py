@@ -23,6 +23,9 @@ class ChatRepository(ABC):
     def fetch_messages(self, chat_id: str) -> list[Message]: ...
 
     @abstractmethod
+    def delete_message(self, chat_id: str, message_id: str) -> None: ...
+
+    @abstractmethod
     def delete_chat(self, chat_id: str) -> None: ...
 
 
@@ -109,6 +112,9 @@ class MongoChatRepository(ChatRepository):
     def delete_chat(self, chat_id: str) -> None:
         self._chats.delete_one({"_id": chat_id})
         self._messages.delete_many({"chat_id": chat_id})
+
+    def delete_message(self, chat_id: str, message_id: str) -> None:
+        self._messages.delete_one({"chat_id": chat_id, "message_id": message_id})
 
     def save_message(self, chat_id: str, message: Message) -> None:
         doc = {**message.model_dump(exclude={"id"}), "chat_id": chat_id, "message_id": message.id}

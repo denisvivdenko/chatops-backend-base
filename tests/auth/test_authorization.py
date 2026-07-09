@@ -38,6 +38,22 @@ def test_user_cannot_send_message_to_another_users_chat(client):
     assert response.status_code == 403
 
 
+def test_user_cannot_modify_message_in_another_users_chat(client):
+    token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
+    chat_id = client.post("/api/chats", json={"message": "Hello"}, headers=auth_headers(token_a)).json()["id"]
+    user_message_id = client.get(f"/api/chats/{chat_id}/messages", headers=auth_headers(token_a)).json()[0]["id"]
+
+    # chat_a's assistant reply is still pending; ownership must still be checked first (403, not 409)
+    response = client.post(
+        f"/api/chats/{chat_id}/messages/{user_message_id}/modify",
+        json={"content": "Intruding"},
+        headers=auth_headers(token_b),
+    )
+
+    assert response.status_code == 403
+
+
 def test_user_cannot_delete_another_users_chat(client):
     token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
     token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
