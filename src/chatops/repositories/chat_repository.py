@@ -1,4 +1,3 @@
-import threading
 from abc import ABC, abstractmethod
 
 import pymongo
@@ -27,52 +26,6 @@ class ChatRepository(ABC):
 
     @abstractmethod
     def delete_chat(self, chat_id: str) -> None: ...
-
-
-class InMemoryChatRepository(ChatRepository):
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._chats: list[Chat] = []
-        self._messages: dict[str, list[Message]] = {}
-
-    def save_chat(self, chat: Chat) -> None:
-        with self._lock:
-            for i, c in enumerate(self._chats):
-                if c.id == chat.id:
-                    self._chats[i] = chat
-                    return
-            self._chats.append(chat)
-
-    def fetch_chat(self, chat_id: str) -> Chat:
-        with self._lock:
-            for c in self._chats:
-                if c.id == chat_id:
-                    return c
-            raise KeyError(chat_id)
-
-    def fetch_chats(self, user_id: str, limit: int | None = None) -> list[Chat]:
-        with self._lock:
-            owned = [c for c in self._chats if c.user_id == user_id]
-            sorted_chats = sorted(owned, key=lambda c: c.last_activity_at, reverse=True)
-            return sorted_chats[:limit]
-
-    def delete_chat(self, chat_id: str) -> None:
-        with self._lock:
-            self._chats = [c for c in self._chats if c.id != chat_id]
-            self._messages.pop(chat_id, None)
-
-    def save_message(self, chat_id: str, message: Message) -> None:
-        with self._lock:
-            messages = self._messages.setdefault(chat_id, [])
-            for i, m in enumerate(messages):
-                if m.id == message.id:
-                    messages[i] = message
-                    return
-            messages.append(message)
-
-    def fetch_messages(self, chat_id: str) -> list[Message]:
-        with self._lock:
-            return list(self._messages.get(chat_id, []))
 
 
 class MongoChatRepository(ChatRepository):

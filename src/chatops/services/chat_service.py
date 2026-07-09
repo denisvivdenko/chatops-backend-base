@@ -2,8 +2,8 @@ import uuid
 import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
-from chatops.repositories.chat_repository import ChatRepository, InMemoryChatRepository
-from chatops.stream.job_stream import JobStream, InMemoryJobStream, AssistantJob
+from chatops.repositories.chat_repository import ChatRepository
+from chatops.stream.job_stream import JobStream, AssistantJob
 
 
 class AssistantMessagePendingError(Exception):

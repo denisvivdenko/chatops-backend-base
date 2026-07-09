@@ -6,20 +6,15 @@ from typing import Callable, Iterator
 import pytest
 import redis as redis_lib
 
-from chatops.stream.event_stream import EventStream, InMemoryEventStream, RedisEventStream
+from chatops.stream.event_stream import EventStream, RedisEventStream
 
 StreamFactory = Callable[..., EventStream]
 
 
 @pytest.fixture(params=[
-    "in_memory",
     pytest.param("redis", marks=pytest.mark.integration),
 ])
 def make_stream(request: pytest.FixtureRequest) -> Iterator[StreamFactory]:
-    if request.param == "in_memory":
-        yield InMemoryEventStream
-        return
-
     redis_host = os.environ.get("REDIS_HOST", "localhost")
     client = redis_lib.Redis(host=redis_host, port=6379, db=1)
     client.flushdb()

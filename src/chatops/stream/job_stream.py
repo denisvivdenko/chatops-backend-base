@@ -22,21 +22,6 @@ class JobStream(ABC):
         ...
 
 
-class InMemoryJobStream(JobStream):
-    def __init__(self, timeout: float = 1.0) -> None:
-        self._queue: queue.Queue[AssistantJob] = queue.Queue()
-        self._timeout = timeout
-
-    def publish(self, job: AssistantJob) -> None:
-        self._queue.put(job)
-
-    def consume(self) -> AssistantJob:
-        try:
-            return self._queue.get(timeout=self._timeout)
-        except queue.Empty:
-            raise TimeoutError()
-
-
 REDIS_JOBS_KEY = "jobs"
 
 
