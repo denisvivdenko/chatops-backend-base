@@ -9,11 +9,13 @@ def test_stream_assistant_response(authed_client_with_worker):
 
     def _collect_events(lines, limit=None):
         events = []
+        prev = None
         for line in lines:
-            if line.startswith("data: "):
+            if line.startswith("data: ") and not (prev or "").startswith("event:"):
                 events.append(json.loads(line[6:]))
                 if limit and len(events) >= limit:
                     break
+            prev = line
         return events
 
     chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
@@ -35,6 +37,18 @@ def test_stream_assistant_response(authed_client_with_worker):
     assert [e["seq_id"] for e in first_events] == list(range(len(first_events)))
     assert "".join(e["token"] for e in first_events) == TEST_RESPONSE
     assert "".join(e["token"] for e in second_events) == TEST_RESPONSE
+
+
+def test_stream_emits_done_event_on_completion(authed_client_with_worker):
+    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
+
+    with authed_client_with_worker.stream("GET", url) as response:
+        lines = [line for line in response.iter_lines() if line]
+
+    assert lines[-2] == "event: done"
+    assert json.loads(lines[-1].removeprefix("data: ")) == {"status": "complete"}
 
 
 @pytest.mark.parametrize(

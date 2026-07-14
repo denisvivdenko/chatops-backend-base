@@ -172,6 +172,8 @@ def stream_message(
                 yield f"data: {json.dumps(event.model_dump())}\n\n"
         except MessageGenerationTimeoutError:
             yield f"event: error\ndata: {json.dumps({'error': 'message_generation_timeout'})}\n\n"
+            return
+        yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
