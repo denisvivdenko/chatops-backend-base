@@ -4,13 +4,20 @@ from typing import AsyncIterator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-from fastapi import APIRouter, FastAPI, Query
+from fastapi import APIRouter, FastAPI, File, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from chatops.api.auth import router as auth_router
-from chatops.api.dependencies import ChatServiceDep, CurrentUserIdDep, EventStreamDep, JobStreamDep, SettingsDep
+from chatops.api.dependencies import (
+    ChatServiceDep,
+    CurrentUserIdDep,
+    EventStreamDep,
+    JobStreamDep,
+    ResourceServiceDep,
+    SettingsDep,
+)
 from chatops.domain.chat import Chat, Message
 from chatops.stream.message_observer import MessageGenerationTimeoutError, MessageObserver
 from chatops.services.chat_service import (
@@ -21,6 +28,7 @@ from chatops.services.chat_service import (
     MessageNotFailedError,
     MessageNotFoundError,
 )
+from chatops.services.resource_service import FileTooLargeError, InvalidFileTypeError
 
 
 class CreateChatRequest(BaseModel):
@@ -176,6 +184,22 @@ def stream_message(
         yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/upload-resource", status_code=201)
+async def upload_resource(
+    service: ResourceServiceDep,
+    user_id: CurrentUserIdDep,
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    try:
+        resource = service.upload_resource(user_id, file.filename, content)
+    except InvalidFileTypeError:
+        return JSONResponse(status_code=400, content={"error": "invalid_file_type"})
+    except FileTooLargeError:
+        return JSONResponse(status_code=400, content={"error": "file_too_large"})
+    return {"id": resource.id, "filename": resource.filename}
 
 
 app = FastAPI()

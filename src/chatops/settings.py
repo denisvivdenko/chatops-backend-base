@@ -13,3 +13,4 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_ttl: float = 900
     refresh_token_ttl: float = 60 * 60 * 24 * 14
+    resource_storage_dir: str = "/data/resources"

@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 
 import pymongo
 import pytest
@@ -11,14 +13,18 @@ from chatops.api.dependencies import (
     get_event_stream,
     get_job_stream,
     get_refresh_token_repository,
+    get_resource_repository,
+    get_resource_storage,
     get_settings,
     get_user_repository,
 )
 from chatops.settings import Settings
+from chatops.storage.resource_storage import ResourceStorage
 from chatops.stream.job_stream import RedisJobStream
 from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
 from chatops.repositories.refresh_token_repository import MongoRefreshTokenRepository
+from chatops.repositories.resource_repository import MongoResourceRepository
 from chatops.repositories.user_repository import MongoUserRepository
 from chatops.services.chat_service import ChatService
 from chatops.workers.worker import Worker, TEST_RESPONSE
@@ -54,10 +60,14 @@ def infra(request):
     mongo_client = pymongo.MongoClient(mongo_host, 27017)
     mongo_client.drop_database(MONGO_TEST_DB)
 
+    resource_storage_dir = tempfile.mkdtemp()
+
     yield dict(
         repo=MongoChatRepository(mongo_client, db_name=MONGO_TEST_DB),
         user_repo=MongoUserRepository(mongo_client, db_name=MONGO_TEST_DB),
         refresh_token_repo=MongoRefreshTokenRepository(mongo_client, db_name=MONGO_TEST_DB),
+        resource_repo=MongoResourceRepository(mongo_client, db_name=MONGO_TEST_DB),
+        resource_storage=ResourceStorage(resource_storage_dir),
         redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
         event_stream=RedisEventStream(redis_client),
@@ -67,6 +77,7 @@ def infra(request):
     redis_client.close()
     mongo_client.drop_database(MONGO_TEST_DB)
     mongo_client.close()
+    shutil.rmtree(resource_storage_dir, ignore_errors=True)
 
 
 @pytest.fixture
@@ -85,6 +96,8 @@ def _setup_app(infra, settings):
     app.dependency_overrides[get_chat_repository] = lambda: infra["repo"]
     app.dependency_overrides[get_user_repository] = lambda: infra["user_repo"]
     app.dependency_overrides[get_refresh_token_repository] = lambda: infra["refresh_token_repo"]
+    app.dependency_overrides[get_resource_repository] = lambda: infra["resource_repo"]
+    app.dependency_overrides[get_resource_storage] = lambda: infra["resource_storage"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
     app.dependency_overrides[get_event_stream] = lambda: _make_event_stream(infra, settings)
     app.dependency_overrides[get_settings] = lambda: settings

@@ -7,12 +7,15 @@ from fastapi import Depends, Header, HTTPException
 
 from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
 from chatops.repositories.refresh_token_repository import RefreshTokenRepository, MongoRefreshTokenRepository
+from chatops.repositories.resource_repository import ResourceRepository, MongoResourceRepository
 from chatops.repositories.user_repository import UserRepository, MongoUserRepository
 from chatops.settings import Settings
+from chatops.storage.resource_storage import ResourceStorage
 from chatops.stream.job_stream import JobStream, RedisJobStream
 from chatops.stream.event_stream import EventStream, RedisEventStream
 from chatops.services.auth_service import AuthService, InvalidAccessTokenError
 from chatops.services.chat_service import ChatService
+from chatops.services.resource_service import ResourceService
 
 
 @lru_cache
@@ -47,6 +50,16 @@ def get_refresh_token_repository() -> RefreshTokenRepository:
     return MongoRefreshTokenRepository(get_mongo_client())
 
 
+@lru_cache
+def get_resource_repository() -> ResourceRepository:
+    return MongoResourceRepository(get_mongo_client())
+
+
+@lru_cache
+def get_resource_storage() -> ResourceStorage:
+    return ResourceStorage(get_settings().resource_storage_dir)
+
+
 def get_job_stream() -> JobStream:
     return RedisJobStream(get_redis_client(), timeout=get_settings().job_stream_timeout)
 
@@ -64,6 +77,13 @@ def get_chat_service(
     return ChatService(chat_repository=repo)
 
 
+def get_resource_service(
+    repo: Annotated[ResourceRepository, Depends(get_resource_repository)],
+    storage: Annotated[ResourceStorage, Depends(get_resource_storage)],
+) -> ResourceService:
+    return ResourceService(resource_repository=repo, resource_storage=storage)
+
+
 def get_auth_service(
     users: Annotated[UserRepository, Depends(get_user_repository)],
     refresh_tokens: Annotated[RefreshTokenRepository, Depends(get_refresh_token_repository)],
@@ -73,6 +93,7 @@ def get_auth_service(
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+ResourceServiceDep = Annotated[ResourceService, Depends(get_resource_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 JobStreamDep = Annotated[JobStream, Depends(get_job_stream)]
 EventStreamDep = Annotated[EventStream, Depends(get_event_stream)]
