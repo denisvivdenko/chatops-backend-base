@@ -3,6 +3,9 @@ import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
+from chatops.repositories.resource_repository import ResourceRepository
+from chatops.services.resource_refs import parse_resource_refs
+from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 from chatops.stream.job_stream import JobStream, AssistantJob
 
 
@@ -34,6 +37,14 @@ class ChatNotFoundError(Exception):
     pass
 
 
+class ResourceNotFoundError(Exception):
+    pass
+
+
+class ResourceAccessDeniedError(Exception):
+    pass
+
+
 ALLOWED_MESSAGE_STATUS_TRANSITIONS: dict[MessageStatus, set[MessageStatus]] = {
     MessageStatus.PENDING: {MessageStatus.COMPLETE, MessageStatus.FAILED},
     MessageStatus.COMPLETE: set(),
@@ -42,10 +53,13 @@ ALLOWED_MESSAGE_STATUS_TRANSITIONS: dict[MessageStatus, set[MessageStatus]] = {
 
 
 class ChatService:
-    def __init__(self, chat_repository: ChatRepository) -> None:
+    def __init__(self, chat_repository: ChatRepository, resource_repository: ResourceRepository) -> None:
         self._repo = chat_repository
+        self._resources = resource_repository
 
-    def create_chat(self, first_message: str, jobs_stream: JobStream, user_id: str) -> Chat:
+    def create_chat(
+        self, first_message: str, user_id: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+    ) -> Chat:
         now = int(time.time() * 1000)
         chat = Chat(
             id=str(uuid.uuid4()),
@@ -55,11 +69,17 @@ class ChatService:
             created_at=now,
         )
         self._repo.save_chat(chat)
-        self.send_message(chat.id, user_id, first_message, jobs_stream)
+        self.send_message(chat.id, user_id, first_message, jobs_stream, ingestion_jobs)
         return chat
 
-    def send_message(self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream) -> Message:
+    def send_message(
+        self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+    ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
+        resource_ids = parse_resource_refs(content)
+        for resource_id in resource_ids:
+            self._assert_owns_resource(resource_id, user_id)
+
         messages = self._repo.fetch_messages(chat_id)
         if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
             raise AssistantMessagePendingError()
@@ -84,7 +104,12 @@ class ChatService:
         )
         self._repo.save_message(chat_id, user_message)
         self._repo.save_message(chat_id, assistant_message)
-        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
+        if resource_ids:
+            ingestion_jobs.publish(IngestionJob(
+                chat_id=chat_id, user_id=user_id, message_id=assistant_message.id, resource_ids=tuple(resource_ids),
+            ))
+        else:
+            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
         return assistant_message
 
     def complete_message(self, chat_id: str, user_id: str, message_id: str, content: str) -> None:
@@ -175,6 +200,14 @@ class ChatService:
             raise ChatNotFoundError()
         if chat.user_id != user_id:
             raise ChatAccessDeniedError()
+
+    def _assert_owns_resource(self, resource_id: str, user_id: str) -> None:
+        try:
+            resource = self._resources.fetch_resource(resource_id)
+        except KeyError:
+            raise ResourceNotFoundError()
+        if resource.user_id != user_id:
+            raise ResourceAccessDeniedError()
 
     def _transition_message_status(
         self, chat_id: str, user_id: str, message_id: str, status: MessageStatus, content: str | None = None,

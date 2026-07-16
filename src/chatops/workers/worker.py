@@ -107,10 +107,12 @@ class Worker:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    from chatops.api.dependencies import get_event_stream, get_job_stream, get_chat_repository
+    from chatops.api.dependencies import get_event_stream, get_job_stream, get_chat_repository, get_resource_repository
 
     job_stream = get_job_stream()
-    chat_service = ChatService(chat_repository=get_chat_repository())
+    chat_service = ChatService(
+        chat_repository=get_chat_repository(), resource_repository=get_resource_repository(),
+    )
 
     Worker(
         jobs_stream=job_stream,

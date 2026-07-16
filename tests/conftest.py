@@ -11,6 +11,7 @@ from chatops.api.main import app
 from chatops.api.dependencies import (
     get_chat_repository,
     get_event_stream,
+    get_ingestion_job_stream,
     get_job_stream,
     get_refresh_token_repository,
     get_resource_repository,
@@ -20,6 +21,7 @@ from chatops.api.dependencies import (
 )
 from chatops.settings import Settings
 from chatops.storage.resource_storage import ResourceStorage
+from chatops.stream.ingestion_job_stream import RedisIngestionJobStream
 from chatops.stream.job_stream import RedisJobStream
 from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
@@ -70,6 +72,7 @@ def infra(request):
         resource_storage=ResourceStorage(resource_storage_dir),
         redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
+        ingestion_job_stream=RedisIngestionJobStream(redis_client),
         event_stream=RedisEventStream(redis_client),
     )
 
@@ -99,6 +102,7 @@ def _setup_app(infra, settings):
     app.dependency_overrides[get_resource_repository] = lambda: infra["resource_repo"]
     app.dependency_overrides[get_resource_storage] = lambda: infra["resource_storage"]
     app.dependency_overrides[get_job_stream] = lambda: infra["job_stream"]
+    app.dependency_overrides[get_ingestion_job_stream] = lambda: infra["ingestion_job_stream"]
     app.dependency_overrides[get_event_stream] = lambda: _make_event_stream(infra, settings)
     app.dependency_overrides[get_settings] = lambda: settings
 
@@ -124,7 +128,7 @@ def authed_client(client):
 
 @pytest.fixture
 def worker(infra, settings):
-    chat_service = ChatService(chat_repository=infra["repo"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
     w = Worker(
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,

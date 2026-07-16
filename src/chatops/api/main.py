@@ -14,6 +14,7 @@ from chatops.api.dependencies import (
     ChatServiceDep,
     CurrentUserIdDep,
     EventStreamDep,
+    IngestionJobStreamDep,
     JobStreamDep,
     ResourceServiceDep,
     SettingsDep,
@@ -27,6 +28,8 @@ from chatops.services.chat_service import (
     ChatNotFoundError,
     MessageNotFailedError,
     MessageNotFoundError,
+    ResourceAccessDeniedError,
+    ResourceNotFoundError,
 )
 from chatops.services.resource_service import FileTooLargeError, InvalidFileTypeError
 
@@ -56,9 +59,10 @@ def create_chat(
     body: CreateChatRequest,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    ingestion_jobs: IngestionJobStreamDep,
     user_id: CurrentUserIdDep,
 ) -> Chat:
-    return service.create_chat(body.message, jobs, user_id)
+    return service.create_chat(body.message, user_id, jobs, ingestion_jobs)
 
 
 @router.delete("/chats/{chat_id}", status_code=204)
@@ -97,16 +101,21 @@ def send_message(
     body: SendMessageRequest,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    ingestion_jobs: IngestionJobStreamDep,
     user_id: CurrentUserIdDep,
 ):
     try:
-        return service.send_message(chat_id, user_id, body.content, jobs)
+        return service.send_message(chat_id, user_id, body.content, jobs, ingestion_jobs)
     except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
     except ChatNotFoundError:
         return JSONResponse(status_code=404, content={"error": "chat_not_found"})
+    except ResourceNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "resource_not_found"})
+    except ResourceAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.post("/chats/{chat_id}/messages/{message_id}/retry", response_model=Message)
