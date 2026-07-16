@@ -39,3 +39,6 @@ class ResourceService:
         )
         self._repo.save_resource(resource)
         return resource
+
+    def fetch_resources(self, user_id: str) -> list[Resource]:
+        return self._repo.fetch_resources(user_id)

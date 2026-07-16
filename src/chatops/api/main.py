@@ -202,6 +202,14 @@ async def upload_resource(
     return {"id": resource.id, "filename": resource.filename}
 
 
+@router.get("/resources")
+def list_resources(
+    service: ResourceServiceDep,
+    user_id: CurrentUserIdDep,
+):
+    return [{"id": r.id, "filename": r.filename} for r in service.fetch_resources(user_id)]
+
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
