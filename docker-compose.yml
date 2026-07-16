@@ -6,6 +6,8 @@ services:
     command: python -m chatops.api.main
     ports:
       - "8000:8000"
+    volumes:
+      - resource-data:/data/resources
     environment:
       REDIS_HOST: redis
       MONGO_HOST: mongo
@@ -20,6 +22,20 @@ services:
     image: ${APP_IMAGE:-chatops-backend:latest}
     build: .
     command: python -m chatops.workers.worker
+    environment:
+      REDIS_HOST: redis
+      MONGO_HOST: mongo
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
+  ingestion-worker:
+    profiles: [deploy]
+    image: ${APP_IMAGE:-chatops-backend:latest}
+    build: .
+    command: python -m chatops.workers.ingestion_worker
     environment:
       REDIS_HOST: redis
       MONGO_HOST: mongo
@@ -62,3 +78,6 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
+
+volumes:
+  resource-data:
