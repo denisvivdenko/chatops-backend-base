@@ -76,6 +76,13 @@ class MongoChatRepository(ChatRepository):
     def fetch_messages(self, chat_id: str) -> list[Message]:
         cursor = self._messages.find({"chat_id": chat_id}).sort("_id", pymongo.ASCENDING)
         return [
-            Message(id=doc["message_id"], role=doc["role"], status=doc["status"], content=doc["content"], created_at=doc["created_at"])
+            Message(
+                id=doc["message_id"],
+                role=doc["role"],
+                status=doc["status"],
+                content=doc["content"],
+                created_at=doc["created_at"],
+                resource_ids_to_process=doc.get("resource_ids_to_process", []),
+            )
             for doc in cursor
         ]

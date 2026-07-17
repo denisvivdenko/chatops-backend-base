@@ -101,15 +101,11 @@ class ChatService:
             status=MessageStatus.PENDING,
             content="",
             created_at=now,
+            resource_ids_to_process=resource_ids,
         )
         self._repo.save_message(chat_id, user_message)
         self._repo.save_message(chat_id, assistant_message)
-        if resource_ids:
-            ingestion_jobs.publish(IngestionJob(
-                chat_id=chat_id, user_id=user_id, message_id=assistant_message.id, resource_ids=tuple(resource_ids),
-            ))
-        else:
-            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
+        self._dispatch_assistant_job(chat_id, user_id, assistant_message.id, resource_ids, jobs_stream, ingestion_jobs)
         return assistant_message
 
     def complete_message(self, chat_id: str, user_id: str, message_id: str, content: str) -> None:
@@ -146,23 +142,39 @@ class ChatService:
                 return message
         raise MessageNotFoundError()
 
-    def retry_message(self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream) -> Message:
+    def retry_message(
+        self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+    ) -> Message:
         message = self.get_message(chat_id, user_id, message_id)
         if message.status != MessageStatus.FAILED:
             raise MessageNotFailedError()
+        for resource_id in message.resource_ids_to_process:
+            self._assert_owns_resource(resource_id, user_id)
         retried = message.model_copy(update={
             "status": MessageStatus.PENDING,
             "content": "",
             "created_at": int(time.time() * 1000),
         })
         self._repo.save_message(chat_id, retried)
-        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
+        self._dispatch_assistant_job(
+            chat_id, user_id, retried.id, retried.resource_ids_to_process, jobs_stream, ingestion_jobs,
+        )
         return retried
 
     def modify_message(
-        self, chat_id: str, user_id: str, message_id: str, content: str, jobs_stream: JobStream,
+        self,
+        chat_id: str,
+        user_id: str,
+        message_id: str,
+        content: str,
+        jobs_stream: JobStream,
+        ingestion_jobs: IngestionJobStream,
     ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
+        resource_ids = parse_resource_refs(content)
+        for resource_id in resource_ids:
+            self._assert_owns_resource(resource_id, user_id)
+
         messages = self._repo.fetch_messages(chat_id)
 
         target_index = next((i for i, m in enumerate(messages) if m.id == message_id), None)
@@ -188,9 +200,10 @@ class ChatService:
             status=MessageStatus.PENDING,
             content="",
             created_at=now,
+            resource_ids_to_process=resource_ids,
         )
         self._repo.save_message(chat_id, assistant_message)
-        jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=assistant_message.id))
+        self._dispatch_assistant_job(chat_id, user_id, assistant_message.id, resource_ids, jobs_stream, ingestion_jobs)
         return assistant_message
 
     def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
@@ -200,6 +213,22 @@ class ChatService:
             raise ChatNotFoundError()
         if chat.user_id != user_id:
             raise ChatAccessDeniedError()
+
+    def _dispatch_assistant_job(
+        self,
+        chat_id: str,
+        user_id: str,
+        message_id: str,
+        resource_ids: list[str],
+        jobs_stream: JobStream,
+        ingestion_jobs: IngestionJobStream,
+    ) -> None:
+        if resource_ids:
+            ingestion_jobs.publish(IngestionJob(
+                chat_id=chat_id, user_id=user_id, message_id=message_id, resource_ids=tuple(resource_ids),
+            ))
+        else:
+            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
 
     def _assert_owns_resource(self, resource_id: str, user_id: str) -> None:
         try:

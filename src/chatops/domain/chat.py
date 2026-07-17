@@ -27,6 +27,7 @@ class Message(BaseModel):
     status: MessageStatus
     content: str
     created_at: int
+    resource_ids_to_process: list[str] = []
 
 
 EOM = "<EOM>"

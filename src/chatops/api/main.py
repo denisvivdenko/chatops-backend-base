@@ -124,10 +124,11 @@ def retry_message(
     message_id: str,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    ingestion_jobs: IngestionJobStreamDep,
     user_id: CurrentUserIdDep,
 ):
     try:
-        return service.retry_message(chat_id, user_id, message_id, jobs)
+        return service.retry_message(chat_id, user_id, message_id, jobs, ingestion_jobs)
     except MessageNotFailedError:
         return JSONResponse(status_code=409, content={"error": "message_not_failed"})
     except ChatAccessDeniedError:
@@ -136,6 +137,10 @@ def retry_message(
         return JSONResponse(status_code=404, content={"error": "chat_not_found"})
     except MessageNotFoundError:
         return JSONResponse(status_code=404, content={"error": "message_not_found"})
+    except ResourceNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "resource_not_found"})
+    except ResourceAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.post("/chats/{chat_id}/messages/{message_id}/modify", response_model=Message)
@@ -145,10 +150,11 @@ def modify_message(
     body: SendMessageRequest,
     service: ChatServiceDep,
     jobs: JobStreamDep,
+    ingestion_jobs: IngestionJobStreamDep,
     user_id: CurrentUserIdDep,
 ):
     try:
-        return service.modify_message(chat_id, user_id, message_id, body.content, jobs)
+        return service.modify_message(chat_id, user_id, message_id, body.content, jobs, ingestion_jobs)
     except AssistantMessagePendingError:
         return JSONResponse(status_code=409, content={"error": "last_assistant_message_not_finished"})
     except CannotModifyAssistantMessageError:
@@ -159,6 +165,10 @@ def modify_message(
         return JSONResponse(status_code=404, content={"error": "chat_not_found"})
     except MessageNotFoundError:
         return JSONResponse(status_code=404, content={"error": "message_not_found"})
+    except ResourceNotFoundError:
+        return JSONResponse(status_code=404, content={"error": "resource_not_found"})
+    except ResourceAccessDeniedError:
+        return JSONResponse(status_code=403, content={"error": "forbidden"})
 
 
 @router.get("/chats/{chat_id}/messages/{message_id}/stream")

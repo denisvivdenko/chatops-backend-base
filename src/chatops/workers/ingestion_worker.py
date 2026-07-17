@@ -66,7 +66,9 @@ class IngestionWorker:
             return
         try:
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
-            response = "Document processed."
+            # import time
+            # time.sleep(10)
+            response = "Document processed"
             self._event_stream.write(stream_key, {"token": response})
             self._service.complete_message(job.chat_id, job.user_id, job.message_id, response)
             self._event_stream.write(stream_key, {"token": EOM})

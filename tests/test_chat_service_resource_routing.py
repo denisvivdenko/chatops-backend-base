@@ -133,3 +133,40 @@ def test_message_with_another_users_resource_ref_raises_and_creates_nothing(infr
         jobs_stream.consume()
     with pytest.raises(TimeoutError):
         ingestion_jobs.consume()
+
+
+def test_retry_message_with_resource_ref_routes_to_ingestion(infra) -> None:
+    service = _make_service(infra)
+    jobs_stream, ingestion_jobs = _make_streams(infra)
+    chat = _start_chat(service, infra, jobs_stream, ingestion_jobs)
+    _seed_resource(infra, "res-1", USER_ID)
+
+    assistant = service.send_message(chat.id, USER_ID, "[doc.pdf](resource://res-1)", jobs_stream, ingestion_jobs)
+    ingestion_jobs.consume()  # drain the original ingestion job
+    service.fail_message(chat.id, USER_ID, assistant.id)
+
+    retried = service.retry_message(chat.id, USER_ID, assistant.id, jobs_stream, ingestion_jobs)
+
+    job = ingestion_jobs.consume()
+    assert job.message_id == retried.id
+    assert job.resource_ids == ("res-1",)
+    with pytest.raises(TimeoutError):
+        jobs_stream.consume()
+
+
+def test_modify_message_with_new_resource_ref_routes_to_ingestion(infra) -> None:
+    service = _make_service(infra)
+    jobs_stream, ingestion_jobs = _make_streams(infra)
+    chat = _start_chat(service, infra, jobs_stream, ingestion_jobs)
+    _seed_resource(infra, "res-1", USER_ID)
+
+    user_message = service.fetch_messages(chat.id, USER_ID)[0]
+    assistant = service.modify_message(
+        chat.id, USER_ID, user_message.id, "[doc.pdf](resource://res-1)", jobs_stream, ingestion_jobs,
+    )
+
+    job = ingestion_jobs.consume()
+    assert job.message_id == assistant.id
+    assert job.resource_ids == ("res-1",)
+    with pytest.raises(TimeoutError):
+        jobs_stream.consume()
