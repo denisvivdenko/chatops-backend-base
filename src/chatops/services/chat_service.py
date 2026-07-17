@@ -3,9 +3,8 @@ import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
-from chatops.repositories.resource_repository import ResourceRepository
 from chatops.services.resource_refs import parse_resource_refs
-from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError
+from chatops.services.resource_service import ResourceService
 from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 from chatops.stream.job_stream import JobStream, AssistantJob
 
@@ -46,9 +45,9 @@ ALLOWED_MESSAGE_STATUS_TRANSITIONS: dict[MessageStatus, set[MessageStatus]] = {
 
 
 class ChatService:
-    def __init__(self, chat_repository: ChatRepository, resource_repository: ResourceRepository) -> None:
+    def __init__(self, chat_repository: ChatRepository, resource_service: ResourceService) -> None:
         self._repo = chat_repository
-        self._resources = resource_repository
+        self._resource_service = resource_service
 
     def create_chat(
         self, first_message: str, user_id: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
@@ -71,7 +70,7 @@ class ChatService:
         self._assert_owns_chat(chat_id, user_id)
         resource_ids = parse_resource_refs(content)
         for resource_id in resource_ids:
-            self._assert_owns_resource(resource_id, user_id)
+            self._resource_service.assert_owns_resource(resource_id, user_id)
 
         messages = self._repo.fetch_messages(chat_id)
         if messages and messages[-1].role == MessageRole.ASSISTANT and messages[-1].status == MessageStatus.PENDING:
@@ -142,7 +141,7 @@ class ChatService:
         if message.status != MessageStatus.FAILED:
             raise MessageNotFailedError()
         for resource_id in message.resource_ids_to_process:
-            self._assert_owns_resource(resource_id, user_id)
+            self._resource_service.assert_owns_resource(resource_id, user_id)
         retried = message.model_copy(update={
             "status": MessageStatus.PENDING,
             "content": "",
@@ -166,7 +165,7 @@ class ChatService:
         self._assert_owns_chat(chat_id, user_id)
         resource_ids = parse_resource_refs(content)
         for resource_id in resource_ids:
-            self._assert_owns_resource(resource_id, user_id)
+            self._resource_service.assert_owns_resource(resource_id, user_id)
 
         messages = self._repo.fetch_messages(chat_id)
 
@@ -222,14 +221,6 @@ class ChatService:
             ))
         else:
             jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
-
-    def _assert_owns_resource(self, resource_id: str, user_id: str) -> None:
-        try:
-            resource = self._resources.fetch_resource(resource_id)
-        except KeyError:
-            raise ResourceNotFoundError()
-        if resource.user_id != user_id:
-            raise ResourceAccessDeniedError()
 
     def _transition_message_status(
         self, chat_id: str, user_id: str, message_id: str, status: MessageStatus, content: str | None = None,

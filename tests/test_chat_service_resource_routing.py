@@ -5,7 +5,7 @@ import pytest
 from chatops.domain.chat import MessageStatus
 from chatops.domain.resource import Resource
 from chatops.services.chat_service import ChatService
-from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError
+from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError, ResourceService
 from chatops.stream.ingestion_job_stream import RedisIngestionJobStream
 from chatops.stream.job_stream import RedisJobStream
 
@@ -14,7 +14,8 @@ OTHER_USER_ID = "other-user"
 
 
 def _make_service(infra) -> ChatService:
-    return ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
 
 
 def _make_streams(infra):

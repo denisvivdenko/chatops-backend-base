@@ -76,18 +76,18 @@ def get_event_stream() -> EventStream:
     )
 
 
-def get_chat_service(
-    repo: Annotated[ChatRepository, Depends(get_chat_repository)],
-    resource_repo: Annotated[ResourceRepository, Depends(get_resource_repository)],
-) -> ChatService:
-    return ChatService(chat_repository=repo, resource_repository=resource_repo)
-
-
 def get_resource_service(
     repo: Annotated[ResourceRepository, Depends(get_resource_repository)],
     storage: Annotated[ResourceStorage, Depends(get_resource_storage)],
 ) -> ResourceService:
     return ResourceService(resource_repository=repo, resource_storage=storage)
+
+
+def get_chat_service(
+    repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    resource_service: Annotated[ResourceService, Depends(get_resource_service)],
+) -> ChatService:
+    return ChatService(chat_repository=repo, resource_service=resource_service)
 
 
 def get_auth_service(

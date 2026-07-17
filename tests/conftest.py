@@ -29,6 +29,7 @@ from chatops.repositories.refresh_token_repository import MongoRefreshTokenRepos
 from chatops.repositories.resource_repository import MongoResourceRepository
 from chatops.repositories.user_repository import MongoUserRepository
 from chatops.services.chat_service import ChatService
+from chatops.services.resource_service import ResourceService
 from chatops.workers.worker import Worker, TEST_RESPONSE
 from chatops.workers.ingestion_worker import IngestionWorker
 
@@ -129,7 +130,8 @@ def authed_client(client):
 
 @pytest.fixture
 def worker(infra, settings):
-    chat_service = ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
     w = Worker(
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,
@@ -157,7 +159,8 @@ def authed_client_with_worker(client_with_worker):
 
 @pytest.fixture
 def ingestion_worker(infra, settings):
-    chat_service = ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
     w = IngestionWorker(
         ingestion_jobs=infra["ingestion_job_stream"],
         chat_service=chat_service,

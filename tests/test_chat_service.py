@@ -2,6 +2,7 @@ import time
 import pytest
 
 from chatops.services.chat_service import ChatService, AssistantMessagePendingError, MessageStatusTransitionError
+from chatops.services.resource_service import ResourceService
 from chatops.domain.chat import MessageRole, MessageStatus
 from chatops.settings import Settings
 from chatops.workers.worker import TEST_RESPONSE
@@ -12,7 +13,8 @@ USER_ID = "test-user"
 
 
 def _make_service(infra) -> ChatService:
-    return ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
 
 
 def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit(infra) -> None:

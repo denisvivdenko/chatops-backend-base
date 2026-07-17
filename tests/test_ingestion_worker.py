@@ -6,6 +6,7 @@ import jwt
 import pytest
 
 from chatops.services.chat_service import ChatService
+from chatops.services.resource_service import ResourceService
 from chatops.stream.event_stream import EventStream
 from chatops.stream.ingestion_job_stream import IngestionJob
 from chatops.workers.ingestion_worker import IngestionWorker
@@ -14,7 +15,8 @@ PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
 
 
 def _make_service(infra) -> ChatService:
-    return ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
 
 
 def _decode_user_id(authed_client) -> str:

@@ -86,10 +86,13 @@ if __name__ == "__main__":
         get_event_stream,
         get_ingestion_job_stream,
         get_resource_repository,
+        get_resource_service,
+        get_resource_storage,
     )
 
     chat_service = ChatService(
-        chat_repository=get_chat_repository(), resource_repository=get_resource_repository(),
+        chat_repository=get_chat_repository(),
+        resource_service=get_resource_service(repo=get_resource_repository(), storage=get_resource_storage()),
     )
 
     IngestionWorker(

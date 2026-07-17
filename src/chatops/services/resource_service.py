@@ -51,12 +51,19 @@ class ResourceService:
     def fetch_resources(self, user_id: str) -> list[Resource]:
         return self._repo.fetch_resources(user_id)
 
+    def assert_owns_resource(self, resource_id: str, user_id: str) -> None:
+        self._fetch_owned_resource(resource_id, user_id)
+
     def delete_resource(self, resource_id: str, user_id: str) -> None:
+        resource = self._fetch_owned_resource(resource_id, user_id)
+        self._repo.delete_resource(resource_id)
+        self._storage.delete(resource.file_path)
+
+    def _fetch_owned_resource(self, resource_id: str, user_id: str) -> Resource:
         try:
             resource = self._repo.fetch_resource(resource_id)
         except KeyError:
             raise ResourceNotFoundError()
         if resource.user_id != user_id:
             raise ResourceAccessDeniedError()
-        self._repo.delete_resource(resource_id)
-        self._storage.delete(resource.file_path)
+        return resource

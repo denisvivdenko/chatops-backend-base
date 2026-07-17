@@ -40,3 +40,25 @@ def test_delete_resource_raises_when_missing(infra) -> None:
 
     with pytest.raises(ResourceNotFoundError):
         service.delete_resource("nonexistent", USER_ID)
+
+
+def test_assert_owns_resource_does_not_raise_for_owner(infra) -> None:
+    service = _make_service(infra)
+    resource = service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)
+
+    service.assert_owns_resource(resource.id, USER_ID)
+
+
+def test_assert_owns_resource_raises_when_not_owned_by_caller(infra) -> None:
+    service = _make_service(infra)
+    resource = service.upload_resource(OTHER_USER_ID, "a.pdf", PDF_CONTENT)
+
+    with pytest.raises(ResourceAccessDeniedError):
+        service.assert_owns_resource(resource.id, USER_ID)
+
+
+def test_assert_owns_resource_raises_when_missing(infra) -> None:
+    service = _make_service(infra)
+
+    with pytest.raises(ResourceNotFoundError):
+        service.assert_owns_resource("nonexistent", USER_ID)
