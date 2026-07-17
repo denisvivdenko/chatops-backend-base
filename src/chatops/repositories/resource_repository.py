@@ -17,6 +17,9 @@ class ResourceRepository(ABC):
     @abstractmethod
     def fetch_resources(self, user_id: str) -> list[Resource]: ...
 
+    @abstractmethod
+    def delete_resource(self, resource_id: str) -> None: ...
+
 
 class MongoResourceRepository(ResourceRepository):
     def __init__(self, client: pymongo.MongoClient, db_name: str = "chatops") -> None:
@@ -37,6 +40,9 @@ class MongoResourceRepository(ResourceRepository):
     def fetch_resources(self, user_id: str) -> list[Resource]:
         cursor = self._resources.find({"user_id": user_id}).sort("created_at", pymongo.DESCENDING)
         return [self._resource_from_doc(doc) for doc in cursor]
+
+    def delete_resource(self, resource_id: str) -> None:
+        self._resources.delete_one({"_id": resource_id})
 
     @staticmethod
     def _resource_from_doc(doc: dict) -> Resource:

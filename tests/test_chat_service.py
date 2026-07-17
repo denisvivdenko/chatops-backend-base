@@ -1,14 +1,22 @@
 import time
 import pytest
 
-from chatops.services.chat_service import ChatService, AssistantMessagePendingError, MessageStatusTransitionError
+from chatops.services.chat_service import (
+    ChatService,
+    AssistantMessagePendingError,
+    MessageStatusTransitionError,
+    ResourceAccessDeniedError,
+    ResourceNotFoundError,
+)
 from chatops.domain.chat import MessageRole, MessageStatus
+from chatops.domain.resource import Resource
 from chatops.settings import Settings
 from chatops.workers.worker import TEST_RESPONSE
 from chatops.stream.message_observer import MessageObserver
 
 FAIL_MESSAGE_AFTER_TIMEOUT = Settings().message_generation_timeout
 USER_ID = "test-user"
+OTHER_USER_ID = "other-user"
 
 
 def _make_service(infra) -> ChatService:
@@ -37,6 +45,35 @@ def test_delete_chat(infra) -> None:
     assert len(service.fetch_chats(USER_ID, limit=10)) == 1
     service.delete_chat(chat.id, USER_ID)
     assert len(service.fetch_chats(USER_ID, limit=10)) == 0
+
+
+def test_delete_resource_removes_it_for_owner(infra) -> None:
+    service = _make_service(infra)
+    resource = Resource(id="r1", user_id=USER_ID, filename="a.pdf", file_path="/data/resources/r1", created_at=1)
+    infra["resource_repo"].save_resource(resource)
+
+    service.delete_resource(resource.id, USER_ID)
+
+    with pytest.raises(KeyError):
+        infra["resource_repo"].fetch_resource(resource.id)
+
+
+def test_delete_resource_raises_when_not_owned_by_caller(infra) -> None:
+    service = _make_service(infra)
+    resource = Resource(id="r1", user_id=OTHER_USER_ID, filename="a.pdf", file_path="/data/resources/r1", created_at=1)
+    infra["resource_repo"].save_resource(resource)
+
+    with pytest.raises(ResourceAccessDeniedError):
+        service.delete_resource(resource.id, USER_ID)
+
+    assert infra["resource_repo"].fetch_resource(resource.id) == resource
+
+
+def test_delete_resource_raises_when_missing(infra) -> None:
+    service = _make_service(infra)
+
+    with pytest.raises(ResourceNotFoundError):
+        service.delete_resource("nonexistent", USER_ID)
 
 
 def test_create_chat_produces_user_and_pending_assistant_and_blocks_follow_up(infra) -> None:

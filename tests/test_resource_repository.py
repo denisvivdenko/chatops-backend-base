@@ -46,3 +46,13 @@ def test_fetch_resources_returns_only_calling_users_resources_newest_first(
     resources = resource_repo.fetch_resources("user-1")
 
     assert [r.id for r in resources] == ["r3", "r1"]
+
+
+def test_delete_resource_removes_it(resource_repo: MongoResourceRepository) -> None:
+    resource = Resource(id="r1", user_id="user-1", filename="a.pdf", file_path="/data/resources/r1", created_at=1)
+    resource_repo.save_resource(resource)
+
+    resource_repo.delete_resource("r1")
+
+    with pytest.raises(KeyError):
+        resource_repo.fetch_resource("r1")
