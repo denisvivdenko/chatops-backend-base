@@ -121,10 +121,6 @@ class ChatService:
         self._assert_owns_chat(chat_id, user_id)
         self._repo.delete_chat(chat_id)
 
-    def delete_resource(self, resource_id: str, user_id: str) -> None:
-        self._assert_owns_resource(resource_id, user_id)
-        self._resources.delete_resource(resource_id)
-
     def fail_stale_pending_messages(self, chat_id: str, user_id: str, fail_message_after_timeout: float) -> None:
         now = int(time.time() * 1000)
         for message in self.fetch_messages(chat_id, user_id):

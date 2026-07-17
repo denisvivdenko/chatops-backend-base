@@ -13,3 +13,6 @@ class ResourceStorage:
 
     def read(self, file_path: str) -> bytes:
         return Path(file_path).read_bytes()
+
+    def delete(self, file_path: str) -> None:
+        Path(file_path).unlink(missing_ok=True)
