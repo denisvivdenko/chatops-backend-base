@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 
@@ -7,6 +8,7 @@ from chatops.storage.resource_storage import ResourceStorage
 
 PDF_MAGIC_BYTES = b"%PDF-"
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
+RESOURCE_REF_PATTERN = re.compile(r"\[[^\]]+\]\(resource://([^)]+)\)")
 
 
 class InvalidFileTypeError(Exception):
@@ -50,6 +52,10 @@ class ResourceService:
 
     def fetch_resources(self, user_id: str) -> list[Resource]:
         return self._repo.fetch_resources(user_id)
+
+    @staticmethod
+    def parse_resource_refs(content: str) -> list[str]:
+        return RESOURCE_REF_PATTERN.findall(content)
 
     def assert_owns_resource(self, resource_id: str, user_id: str) -> None:
         self._fetch_owned_resource(resource_id, user_id)

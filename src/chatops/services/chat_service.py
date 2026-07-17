@@ -3,7 +3,6 @@ import time
 
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
-from chatops.services.resource_refs import parse_resource_refs
 from chatops.services.resource_service import ResourceService
 from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 from chatops.stream.job_stream import JobStream, AssistantJob
@@ -68,7 +67,7 @@ class ChatService:
         self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
     ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
-        resource_ids = parse_resource_refs(content)
+        resource_ids = self._resource_service.parse_resource_refs(content)
         for resource_id in resource_ids:
             self._resource_service.assert_owns_resource(resource_id, user_id)
 
@@ -163,7 +162,7 @@ class ChatService:
         ingestion_jobs: IngestionJobStream,
     ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
-        resource_ids = parse_resource_refs(content)
+        resource_ids = self._resource_service.parse_resource_refs(content)
         for resource_id in resource_ids:
             self._resource_service.assert_owns_resource(resource_id, user_id)
 
