@@ -4,7 +4,8 @@ import pytest
 
 from chatops.domain.chat import MessageStatus
 from chatops.domain.resource import Resource
-from chatops.services.chat_service import ChatService, ResourceAccessDeniedError, ResourceNotFoundError
+from chatops.services.chat_service import ChatService
+from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError
 from chatops.stream.ingestion_job_stream import RedisIngestionJobStream
 from chatops.stream.job_stream import RedisJobStream
 

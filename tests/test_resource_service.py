@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from chatops.services.chat_service import ResourceAccessDeniedError, ResourceNotFoundError
-from chatops.services.resource_service import ResourceService
+from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError, ResourceService
 
 USER_ID = "test-user"
 OTHER_USER_ID = "other-user"

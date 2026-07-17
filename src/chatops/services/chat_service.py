@@ -5,6 +5,7 @@ from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.repositories.resource_repository import ResourceRepository
 from chatops.services.resource_refs import parse_resource_refs
+from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError
 from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 from chatops.stream.job_stream import JobStream, AssistantJob
 
@@ -34,14 +35,6 @@ class ChatAccessDeniedError(Exception):
 
 
 class ChatNotFoundError(Exception):
-    pass
-
-
-class ResourceNotFoundError(Exception):
-    pass
-
-
-class ResourceAccessDeniedError(Exception):
     pass
 
 

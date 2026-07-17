@@ -3,7 +3,6 @@ import uuid
 
 from chatops.domain.resource import Resource
 from chatops.repositories.resource_repository import ResourceRepository
-from chatops.services.chat_service import ResourceAccessDeniedError, ResourceNotFoundError
 from chatops.storage.resource_storage import ResourceStorage
 
 PDF_MAGIC_BYTES = b"%PDF-"
@@ -15,6 +14,14 @@ class InvalidFileTypeError(Exception):
 
 
 class FileTooLargeError(Exception):
+    pass
+
+
+class ResourceNotFoundError(Exception):
+    pass
+
+
+class ResourceAccessDeniedError(Exception):
     pass
 
 
