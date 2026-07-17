@@ -30,6 +30,7 @@ from chatops.repositories.resource_repository import MongoResourceRepository
 from chatops.repositories.user_repository import MongoUserRepository
 from chatops.services.chat_service import ChatService
 from chatops.workers.worker import Worker, TEST_RESPONSE
+from chatops.workers.ingestion_worker import IngestionWorker
 
 MONGO_TEST_DB = "chatops_test"
 
@@ -152,3 +153,30 @@ def authed_client_with_worker(client_with_worker):
     token = client_with_worker.post("/api/auth/anonymous-session").json()["access_token"]
     client_with_worker.headers["Authorization"] = f"Bearer {token}"
     yield client_with_worker
+
+
+@pytest.fixture
+def ingestion_worker(infra, settings):
+    chat_service = ChatService(chat_repository=infra["repo"], resource_repository=infra["resource_repo"])
+    w = IngestionWorker(
+        ingestion_jobs=infra["ingestion_job_stream"],
+        chat_service=chat_service,
+        event_stream=_make_event_stream(infra, settings),
+    ).start()
+    yield w
+    w.stop()
+
+
+@pytest.fixture
+def client_with_ingestion_worker(infra, settings, ingestion_worker):
+    _setup_app(infra, settings)
+    with TestClient(app) as c:
+        yield c
+    _teardown_app()
+
+
+@pytest.fixture
+def authed_client_with_ingestion_worker(client_with_ingestion_worker):
+    token = client_with_ingestion_worker.post("/api/auth/anonymous-session").json()["access_token"]
+    client_with_ingestion_worker.headers["Authorization"] = f"Bearer {token}"
+    yield client_with_ingestion_worker

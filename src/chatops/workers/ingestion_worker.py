@@ -13,6 +13,8 @@ from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 
 logger = logging.getLogger(__name__)
 
+DOCUMENT_PROCESSED_RESPONSE = "Document processed"
+
 
 class IngestionWorker:
     def __init__(
@@ -66,9 +68,7 @@ class IngestionWorker:
             return
         try:
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
-            # import time
-            # time.sleep(10)
-            response = "Document processed"
+            response = DOCUMENT_PROCESSED_RESPONSE
             self._event_stream.write(stream_key, {"token": response})
             self._service.complete_message(job.chat_id, job.user_id, job.message_id, response)
             self._event_stream.write(stream_key, {"token": EOM})
