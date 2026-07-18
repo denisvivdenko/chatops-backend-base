@@ -71,6 +71,13 @@ class ResourceService:
         self._repo.delete_resource(resource_id)
         self._storage.delete(resource.file_path)
 
+    def delete_resource_by_name(self, user_id: str, filename: str) -> None:
+        resource = next((r for r in self._repo.fetch_resources(user_id) if r.filename == filename), None)
+        if resource is None:
+            raise ResourceNotFoundError()
+        self._repo.delete_resource(resource.id)
+        self._storage.delete(resource.file_path)
+
     def _fetch_owned_resource(self, resource_id: str, user_id: str) -> Resource:
         try:
             resource = self._repo.fetch_resource(resource_id)

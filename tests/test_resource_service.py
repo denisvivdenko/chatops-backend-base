@@ -64,6 +64,35 @@ def test_upload_resource_allows_same_filename_for_different_users(infra) -> None
     assert resource.filename == "a.pdf"
 
 
+def test_delete_resource_by_name_removes_record_and_file_for_owner(infra) -> None:
+    service = _make_service(infra)
+    resource = service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)
+
+    service.delete_resource_by_name(USER_ID, "a.pdf")
+
+    with pytest.raises(KeyError):
+        infra["resource_repo"].fetch_resource(resource.id)
+    assert not Path(resource.file_path).exists()
+
+
+def test_delete_resource_by_name_raises_when_missing(infra) -> None:
+    service = _make_service(infra)
+
+    with pytest.raises(ResourceNotFoundError):
+        service.delete_resource_by_name(USER_ID, "nonexistent.pdf")
+
+
+def test_delete_resource_by_name_does_not_delete_other_users_resource(infra) -> None:
+    service = _make_service(infra)
+    resource = service.upload_resource(OTHER_USER_ID, "a.pdf", PDF_CONTENT)
+
+    with pytest.raises(ResourceNotFoundError):
+        service.delete_resource_by_name(USER_ID, "a.pdf")
+
+    assert infra["resource_repo"].fetch_resource(resource.id) == resource
+    assert Path(resource.file_path).exists()
+
+
 def test_assert_owns_resource_does_not_raise_for_owner(infra) -> None:
     service = _make_service(infra)
     resource = service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)

@@ -220,8 +220,7 @@ async def upload_resource(
         try:
             resource = service.upload_resource(user_id, file.filename, content)
         except ResourceAlreadyExistsError:
-            existing = next(r for r in service.fetch_resources(user_id) if r.filename == file.filename)
-            service.delete_resource(existing.id, user_id)
+            service.delete_resource_by_name(user_id, file.filename)
             resource = service.upload_resource(user_id, file.filename, content)
     except InvalidFileTypeError:
         return JSONResponse(status_code=400, content={"error": "invalid_file_type"})
