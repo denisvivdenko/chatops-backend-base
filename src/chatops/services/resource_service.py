@@ -27,6 +27,10 @@ class ResourceAccessDeniedError(Exception):
     pass
 
 
+class ResourceAlreadyExistsError(Exception):
+    pass
+
+
 class ResourceService:
     def __init__(self, resource_repository: ResourceRepository, resource_storage: ResourceStorage) -> None:
         self._repo = resource_repository
@@ -37,6 +41,8 @@ class ResourceService:
             raise InvalidFileTypeError()
         if len(content) > MAX_FILE_SIZE_BYTES:
             raise FileTooLargeError()
+        if any(resource.filename == filename for resource in self._repo.fetch_resources(user_id)):
+            raise ResourceAlreadyExistsError()
 
         resource_id = str(uuid.uuid4())
         file_path = self._storage.save(resource_id, content)

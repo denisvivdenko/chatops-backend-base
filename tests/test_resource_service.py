@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from chatops.services.resource_service import ResourceAccessDeniedError, ResourceNotFoundError, ResourceService
+from chatops.services.resource_service import (
+    ResourceAccessDeniedError,
+    ResourceAlreadyExistsError,
+    ResourceNotFoundError,
+    ResourceService,
+)
 
 USER_ID = "test-user"
 OTHER_USER_ID = "other-user"
@@ -40,6 +45,23 @@ def test_delete_resource_raises_when_missing(infra) -> None:
 
     with pytest.raises(ResourceNotFoundError):
         service.delete_resource("nonexistent", USER_ID)
+
+
+def test_upload_resource_raises_when_filename_already_exists_for_user(infra) -> None:
+    service = _make_service(infra)
+    service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)
+
+    with pytest.raises(ResourceAlreadyExistsError):
+        service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)
+
+
+def test_upload_resource_allows_same_filename_for_different_users(infra) -> None:
+    service = _make_service(infra)
+    service.upload_resource(USER_ID, "a.pdf", PDF_CONTENT)
+
+    resource = service.upload_resource(OTHER_USER_ID, "a.pdf", PDF_CONTENT)
+
+    assert resource.filename == "a.pdf"
 
 
 def test_assert_owns_resource_does_not_raise_for_owner(infra) -> None:
