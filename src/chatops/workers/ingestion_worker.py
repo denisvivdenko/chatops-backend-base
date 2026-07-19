@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 
 from chatops.domain.chat import EOM, MessageStatus
 from chatops.services.chat_service import (
@@ -22,10 +23,12 @@ class IngestionWorker:
         ingestion_jobs: IngestionJobStream,
         chat_service: ChatService,
         event_stream: EventStream,
+        processing_delay: float = 0.0,
     ) -> None:
         self._jobs = ingestion_jobs
         self._service = chat_service
         self._event_stream = event_stream
+        self._processing_delay = processing_delay
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -67,8 +70,8 @@ class IngestionWorker:
             )
             return
         try:
-            # import time
-            # time.sleep(15)
+            if self._processing_delay:
+                time.sleep(self._processing_delay)
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
             response = DOCUMENT_PROCESSED_RESPONSE
             self._event_stream.write(stream_key, {"token": response})
@@ -101,4 +104,5 @@ if __name__ == "__main__":
         ingestion_jobs=get_ingestion_job_stream(),
         chat_service=chat_service,
         event_stream=get_event_stream(),
+        processing_delay=15.0,
     ).start().join()
