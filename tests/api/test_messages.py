@@ -1,7 +1,7 @@
-import time
 import pytest
 
 from chatops.workers.worker import TEST_RESPONSE
+from conftest import sleep_until_message_timed_out
 
 
 def test_fetch_messages_after_create_chat(authed_client):
@@ -45,16 +45,16 @@ def test_send_message_lifecycle(authed_client_with_worker):
 
 @pytest.mark.parametrize(
     "settings",
-    [{"message_generation_timeout": 0.05}],
+    [{"message_timeout": {"message_generation_timeout": 0.05}}],
     indirect=True,
 )
-def test_assistant_message_marked_failed_when_not_picked_up_by_worker(authed_client):
+def test_assistant_message_marked_failed_when_not_picked_up_by_worker(authed_client, settings):
     chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
     messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "pending"
 
-    time.sleep(0.1)
+    sleep_until_message_timed_out(messages[1], settings.message_timeout)
 
     messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "failed"
@@ -62,14 +62,15 @@ def test_assistant_message_marked_failed_when_not_picked_up_by_worker(authed_cli
 
 @pytest.mark.parametrize(
     "settings",
-    [{"message_generation_timeout": 0.5}],
+    [{"message_timeout": {"message_generation_timeout": 0.5}}],
     indirect=True,
 )
-def test_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, request):
+def test_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, settings, request):
     chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "pending"
+    assistant_message = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]
+    assert assistant_message["status"] == "pending"
 
-    time.sleep(0.6)  # no worker running yet, so this message's job sits stale in the queue
+    sleep_until_message_timed_out(assistant_message, settings.message_timeout)  # no worker running yet, so this message's job sits stale in the queue
     assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
     other_chat_id = authed_client.post("/api/chats", json={"message": "Other"}).json()["id"]

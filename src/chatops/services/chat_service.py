@@ -117,13 +117,12 @@ class ChatService:
         self._assert_owns_chat(chat_id, user_id)
         self._repo.delete_chat(chat_id)
 
-    def fail_stale_pending_messages(self, chat_id: str, user_id: str, fail_message_after_timeout: float) -> None:
-        now = int(time.time() * 1000)
+    def fail_stale_pending_messages(self, chat_id: str, user_id: str, timeout_settings: MessageTimeoutSettings) -> None:
         for message in self.fetch_messages(chat_id, user_id):
             if (
                 message.role == MessageRole.ASSISTANT
                 and message.status == MessageStatus.PENDING
-                and now - message.created_at > fail_message_after_timeout * 1000
+                and self.estimate_message_timeout(message, timeout_settings) <= 0
             ):
                 self.fail_message(chat_id, user_id, message.id)
 
@@ -202,7 +201,8 @@ class ChatService:
         self._dispatch_assistant_job(chat_id, user_id, assistant_message.id, resource_ids, jobs_stream, ingestion_jobs)
         return assistant_message
 
-    def estimate_message_timeout(self, message: Message, timeout_settings: MessageTimeoutSettings) -> float:
+    @staticmethod
+    def estimate_message_timeout(message: Message, timeout_settings: MessageTimeoutSettings) -> float:
         if message.role != MessageRole.ASSISTANT:
             raise MessageNotAssistantError()
 

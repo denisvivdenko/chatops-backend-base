@@ -91,7 +91,7 @@ def fetch_messages(
     user_id: CurrentUserIdDep,
 ):
     try:
-        service.fail_stale_pending_messages(chat_id, user_id, fail_message_after_timeout=settings.message_generation_timeout)
+        service.fail_stale_pending_messages(chat_id, user_id, timeout_settings=settings.message_timeout)
         return service.fetch_messages(chat_id, user_id)
     except ChatAccessDeniedError:
         return JSONResponse(status_code=403, content={"error": "forbidden"})
@@ -194,7 +194,7 @@ def stream_message(
         return JSONResponse(status_code=404, content={"error": "message_not_found"})
 
     observer = MessageObserver(
-        chat_id, message_id, event_stream, timeout=settings.message_generation_timeout
+        chat_id, message_id, event_stream, timeout=settings.message_timeout.message_generation_timeout
     )
 
     async def event_generator() -> AsyncIterator[str]:

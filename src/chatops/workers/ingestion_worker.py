@@ -67,6 +67,8 @@ class IngestionWorker:
             )
             return
         try:
+            # import time
+            # time.sleep(15)
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
             response = DOCUMENT_PROCESSED_RESPONSE
             self._event_stream.write(stream_key, {"token": response})

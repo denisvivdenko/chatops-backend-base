@@ -1,7 +1,7 @@
-import time
 import pytest
 
 from chatops.workers.worker import TEST_RESPONSE
+from conftest import sleep_until_message_timed_out
 
 
 def test_modify_message_updates_content_and_returns_new_pending_assistant(authed_client_with_worker):
@@ -119,14 +119,16 @@ def test_modified_message_can_be_completed_by_worker(authed_client_with_worker):
 
 @pytest.mark.parametrize(
     "settings",
-    [{"message_generation_timeout": 0.05}],
+    [{"message_timeout": {"message_generation_timeout": 0.05}}],
     indirect=True,
 )
-def test_modify_message_allowed_after_assistant_failed(authed_client):
+def test_modify_message_allowed_after_assistant_failed(authed_client, settings):
     chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    user_message_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[0]["id"]
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
+    user_message_id = messages[0]["id"]
+    assistant_message = messages[1]
 
-    time.sleep(0.1)
+    sleep_until_message_timed_out(assistant_message, settings.message_timeout)
     assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
     response = authed_client.post(

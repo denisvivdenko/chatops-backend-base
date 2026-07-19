@@ -72,7 +72,7 @@ def get_ingestion_job_stream() -> IngestionJobStream:
 def get_event_stream() -> EventStream:
     settings = get_settings()
     return RedisEventStream(
-        get_redis_client(), timeout=settings.event_stream_timeout, ttl=settings.message_generation_timeout,
+        get_redis_client(), timeout=settings.event_stream_timeout, ttl=settings.message_timeout.message_generation_timeout,
     )
 
 

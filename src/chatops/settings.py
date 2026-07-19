@@ -6,13 +6,13 @@ class MessageTimeoutSettings(BaseSettings):
     resource_processing_timeout: float = 20 
 
 class Settings(BaseSettings):
+    message_timeout: MessageTimeoutSettings = MessageTimeoutSettings()
     redis_host: str = "localhost"
     redis_port: int = 6379
     mongo_host: str = "localhost"
     mongo_port: int = 27017
     job_stream_timeout: float = 1.0
     event_stream_timeout: float = 3.0
-    message_generation_timeout: float = 10
     jwt_secret: str = "insecure-dev-secret-change-me-in-production"
     jwt_algorithm: str = "HS256"
     access_token_ttl: float = 900

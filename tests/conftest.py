@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import time
 
 import pymongo
 import pytest
@@ -19,7 +20,8 @@ from chatops.api.dependencies import (
     get_settings,
     get_user_repository,
 )
-from chatops.settings import Settings
+from chatops.domain.chat import Message
+from chatops.settings import MessageTimeoutSettings, Settings
 from chatops.storage.resource_storage import ResourceStorage
 from chatops.stream.ingestion_job_stream import RedisIngestionJobStream
 from chatops.stream.job_stream import RedisJobStream
@@ -91,9 +93,14 @@ def settings(request) -> Settings:
     return Settings(**overrides)
 
 
+def sleep_until_message_timed_out(message: dict, timeout_settings: MessageTimeoutSettings, buffer: float = 0.05) -> None:
+    remaining = ChatService.estimate_message_timeout(Message(**message), timeout_settings)
+    time.sleep(remaining + buffer)
+
+
 def _make_event_stream(infra, settings):
     return RedisEventStream(
-        infra["redis_client"], timeout=settings.event_stream_timeout, ttl=settings.message_generation_timeout,
+        infra["redis_client"], timeout=settings.event_stream_timeout, ttl=settings.message_timeout.message_generation_timeout,
     )
 
 

@@ -1,8 +1,8 @@
 import json
-import time
 import pytest
 
 from chatops.workers.worker import TEST_RESPONSE
+from conftest import sleep_until_message_timed_out
 
 
 def test_stream_assistant_response(authed_client_with_worker):
@@ -53,7 +53,7 @@ def test_stream_emits_done_event_on_completion(authed_client_with_worker):
 
 @pytest.mark.parametrize(
     "settings",
-    [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.2}],
+    [{"event_stream_timeout": 0.05, "message_timeout": {"message_generation_timeout": 0.2}}],
     indirect=True,
 )
 def test_stream_emits_error_event_when_generation_times_out(authed_client):
@@ -72,19 +72,20 @@ def test_stream_emits_error_event_when_generation_times_out(authed_client):
 
 @pytest.mark.parametrize(
     "settings",
-    [{"event_stream_timeout": 0.05, "message_generation_timeout": 0.3}],
+    [{"event_stream_timeout": 0.05, "message_timeout": {"message_generation_timeout": 0.3}}],
     indirect=True,
 )
-def test_reopening_stream_after_generation_timeout_receives_error(authed_client_with_worker):
+def test_reopening_stream_after_generation_timeout_receives_error(authed_client_with_worker, settings):
     chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    assistant_message = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]
+    assistant_id = assistant_message["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
     with authed_client_with_worker.stream("GET", url) as first_resp:
         first_line = next(line for line in first_resp.iter_lines() if line.startswith("data: "))
     assert json.loads(first_line.removeprefix("data: "))["token"]
 
-    time.sleep(0.4)
+    sleep_until_message_timed_out(assistant_message, settings.message_timeout)
 
     with authed_client_with_worker.stream("GET", url) as second_resp:
         lines = list(second_resp.iter_lines())

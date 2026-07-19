@@ -14,7 +14,7 @@ from chatops.settings import Settings, MessageTimeoutSettings
 from chatops.workers.worker import TEST_RESPONSE
 from chatops.stream.message_observer import MessageObserver
 
-FAIL_MESSAGE_AFTER_TIMEOUT = Settings().message_generation_timeout
+FAIL_MESSAGE_AFTER_TIMEOUT = Settings().message_timeout.message_generation_timeout
 USER_ID = "test-user"
 
 
@@ -114,7 +114,7 @@ def test_fail_stale_pending_messages_fails_assistant_message_past_timeout(infra)
     service = _make_service(infra)
     chat = service.create_chat("Hello", USER_ID, infra["job_stream"], infra["ingestion_job_stream"])
 
-    service.fail_stale_pending_messages(chat.id, USER_ID, fail_message_after_timeout=0)
+    service.fail_stale_pending_messages(chat.id, USER_ID, timeout_settings=MessageTimeoutSettings(message_generation_timeout=0))
 
     assistant = service.fetch_messages(chat.id, USER_ID)[1]
     assert assistant.status == MessageStatus.FAILED
@@ -124,7 +124,9 @@ def test_fail_stale_pending_messages_leaves_fresh_pending_message_untouched(infr
     service = _make_service(infra)
     chat = service.create_chat("Hello", USER_ID, infra["job_stream"], infra["ingestion_job_stream"])
 
-    service.fail_stale_pending_messages(chat.id, USER_ID, fail_message_after_timeout=FAIL_MESSAGE_AFTER_TIMEOUT)
+    service.fail_stale_pending_messages(
+        chat.id, USER_ID, timeout_settings=MessageTimeoutSettings(message_generation_timeout=FAIL_MESSAGE_AFTER_TIMEOUT),
+    )
 
     assistant = service.fetch_messages(chat.id, USER_ID)[1]
     assert assistant.status == MessageStatus.PENDING

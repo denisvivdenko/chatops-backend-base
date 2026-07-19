@@ -1,8 +1,7 @@
-import time
-
 import pytest
 
 from chatops.workers.ingestion_worker import DOCUMENT_PROCESSED_RESPONSE
+from conftest import sleep_until_message_timed_out
 
 PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
 
@@ -63,18 +62,19 @@ def test_follow_up_message_with_resource_ref_is_processed_by_ingestion_worker(au
 
 @pytest.mark.parametrize(
     "settings",
-    [{"message_generation_timeout": 0.05}],
+    [{"message_timeout": {"resource_processing_timeout": 0.05}}],
     indirect=True,
 )
-def test_retry_of_failed_resource_ref_message_is_processed_by_ingestion_worker(authed_client, infra, request):
+def test_retry_of_failed_resource_ref_message_is_processed_by_ingestion_worker(authed_client, settings, infra, request):
     resource_id = _upload_resource(authed_client)
 
     chat_id = authed_client.post(
         "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
     ).json()["id"]
-    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    assistant_message = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]
+    assistant_id = assistant_message["id"]
 
-    time.sleep(0.1)  # no worker running yet, so the message times out and fails
+    sleep_until_message_timed_out(assistant_message, settings.message_timeout)  # no worker running yet, so the message times out and fails
     assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
     infra["ingestion_job_stream"].consume()  # drain the original job, never picked up before the timeout
 

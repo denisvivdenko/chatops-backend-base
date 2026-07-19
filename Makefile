@@ -10,5 +10,7 @@ build:
 	docker compose build api worker
 	docker image prune -f
 
+TEST ?= tests/
+
 test:
-	docker compose --profile tests run --rm --build tests
+	docker compose --profile tests run --rm --build tests pytest $(TEST) --integration -v

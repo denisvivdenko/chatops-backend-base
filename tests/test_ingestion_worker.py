@@ -11,6 +11,8 @@ from chatops.stream.event_stream import EventStream
 from chatops.stream.ingestion_job_stream import IngestionJob
 from chatops.workers.ingestion_worker import IngestionWorker
 
+from conftest import sleep_until_message_timed_out
+
 PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
 
 
@@ -55,12 +57,13 @@ def test_message_with_resource_ref_completes_via_ingestion_worker(authed_client,
     assert messages[1]["content"]
 
 
-@pytest.mark.parametrize("settings", [{"message_generation_timeout": 0.05}], indirect=True)
-def test_ingestion_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, request) -> None:
+@pytest.mark.parametrize("settings", [{"message_timeout": {"resource_processing_timeout": 0.05}}], indirect=True)
+def test_ingestion_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, settings, request) -> None:
     resource_id = _upload_resource(authed_client, "doc.pdf")
     chat_id = authed_client.post("/api/chats", json={"message": f"[doc.pdf](resource://{resource_id})"}).json()["id"]
+    assistant_message = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]
 
-    time.sleep(0.1)  # no ingestion worker running yet, so this message's job sits stale in the queue
+    sleep_until_message_timed_out(assistant_message, settings.message_timeout)  # no ingestion worker running yet, so this message's job sits stale in the queue
     assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
     other_resource_id = _upload_resource(authed_client, "other.pdf")
