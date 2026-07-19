@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from chatops.workers.ingestion_worker import DOCUMENT_PROCESSED_RESPONSE
@@ -89,6 +91,30 @@ def test_retry_of_failed_resource_ref_message_is_processed_by_ingestion_worker(a
     assert messages[1]["id"] == assistant_id
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == DOCUMENT_PROCESSED_RESPONSE
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{
+        "event_stream_timeout": 0.05,
+        "message_timeout": {"message_generation_timeout": 0.1, "resource_processing_timeout": 0.5},
+    }],
+    indirect=True,
+)
+def test_stream_uses_resource_processing_timeout_for_resource_messages(authed_client):
+    resource_id = _upload_resource(authed_client)
+    chat_id = authed_client.post(
+        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
+    ).json()["id"]
+    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+
+    start = time.monotonic()
+    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+        lines = list(resp.iter_lines())
+    elapsed = time.monotonic() - start
+
+    assert "event: error" in lines
+    assert elapsed > 0.3  # governed by resource_processing_timeout (0.5s), not message_generation_timeout (0.1s)
 
 
 def test_modify_message_adding_resource_ref_is_processed_by_ingestion_worker(authed_client_with_ingestion_worker):
