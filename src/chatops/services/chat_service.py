@@ -4,6 +4,7 @@ import time
 from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.services.resource_service import ResourceService
+from chatops.settings import MessageTimeoutSettings
 from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
 from chatops.stream.job_stream import JobStream, AssistantJob
 
@@ -33,6 +34,10 @@ class ChatAccessDeniedError(Exception):
 
 
 class ChatNotFoundError(Exception):
+    pass
+
+
+class MessageNotAssistantError(Exception):
     pass
 
 
@@ -196,6 +201,18 @@ class ChatService:
         self._repo.save_message(chat_id, assistant_message)
         self._dispatch_assistant_job(chat_id, user_id, assistant_message.id, resource_ids, jobs_stream, ingestion_jobs)
         return assistant_message
+
+    def estimate_message_timeout(self, message: Message, timeout_settings: MessageTimeoutSettings) -> float:
+        if message.role != MessageRole.ASSISTANT:
+            raise MessageNotAssistantError()
+
+        if message.resource_ids_to_process:
+            timeout = len(message.resource_ids_to_process) * timeout_settings.resource_processing_timeout
+        else:
+            timeout = timeout_settings.message_generation_timeout
+
+        elapsed = (int(time.time() * 1000) - message.created_at) / 1000
+        return max(timeout - elapsed, 0)
 
     def _assert_owns_chat(self, chat_id: str, user_id: str) -> None:
         try:

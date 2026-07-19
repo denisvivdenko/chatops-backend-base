@@ -1,10 +1,16 @@
+import uuid
 import time
 import pytest
 
-from chatops.services.chat_service import ChatService, AssistantMessagePendingError, MessageStatusTransitionError
+from chatops.services.chat_service import (
+    ChatService,
+    AssistantMessagePendingError,
+    MessageStatusTransitionError,
+    MessageNotAssistantError,
+)
 from chatops.services.resource_service import ResourceService
-from chatops.domain.chat import MessageRole, MessageStatus
-from chatops.settings import Settings
+from chatops.domain.chat import Message, MessageRole, MessageStatus
+from chatops.settings import Settings, MessageTimeoutSettings
 from chatops.workers.worker import TEST_RESPONSE
 from chatops.stream.message_observer import MessageObserver
 
@@ -15,6 +21,21 @@ USER_ID = "test-user"
 def _make_service(infra) -> ChatService:
     resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
     return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
+
+
+def _make_message(
+    role: MessageRole = MessageRole.ASSISTANT,
+    resource_ids: list[str] | None = None,
+    created_at: int | None = None,
+) -> Message:
+    return Message(
+        id=str(uuid.uuid4()),
+        role=role,
+        status=MessageStatus.PENDING,
+        content="",
+        created_at=created_at if created_at is not None else int(time.time() * 1000),
+        resource_ids_to_process=resource_ids or [],
+    )
 
 
 def test_fetch_chats_sorted_by_most_recent_first_and_respects_limit(infra) -> None:
@@ -133,3 +154,53 @@ def test_can_send_next_message_after_assistant_completes(infra) -> None:
     response = service.send_message(chat.id, USER_ID, "What is the weather today?", jobs_stream, ingestion_jobs)
     assert response.role == MessageRole.ASSISTANT
     assert response.status == MessageStatus.PENDING
+
+
+def test_estimate_message_timeout_raises_for_non_assistant_message(infra) -> None:
+    service = _make_service(infra)
+    message = _make_message(role=MessageRole.USER)
+
+    with pytest.raises(MessageNotAssistantError):
+        service.estimate_message_timeout(message, MessageTimeoutSettings())
+
+
+def test_estimate_message_timeout_returns_generation_timeout_for_message_without_resources(infra) -> None:
+    service = _make_service(infra)
+    timeout_settings = MessageTimeoutSettings(message_generation_timeout=10, resource_processing_timeout=20)
+    message = _make_message()
+
+    result = service.estimate_message_timeout(message, timeout_settings)
+
+    assert result == pytest.approx(10, abs=0.5)
+
+
+def test_estimate_message_timeout_multiplies_resource_timeout_by_resource_count(infra) -> None:
+    service = _make_service(infra)
+    timeout_settings = MessageTimeoutSettings(message_generation_timeout=10, resource_processing_timeout=20)
+    message = _make_message(resource_ids=["resource-1", "resource-2", "resource-3"])
+
+    result = service.estimate_message_timeout(message, timeout_settings)
+
+    assert result == pytest.approx(60, abs=0.5)
+
+
+def test_estimate_message_timeout_subtracts_elapsed_time_since_created_at(infra) -> None:
+    service = _make_service(infra)
+    timeout_settings = MessageTimeoutSettings(message_generation_timeout=10, resource_processing_timeout=20)
+    created_at = int(time.time() * 1000) - 4000
+    message = _make_message(created_at=created_at)
+
+    result = service.estimate_message_timeout(message, timeout_settings)
+
+    assert result == pytest.approx(6, abs=0.5)
+
+
+def test_estimate_message_timeout_clamps_at_zero_when_elapsed_exceeds_timeout(infra) -> None:
+    service = _make_service(infra)
+    timeout_settings = MessageTimeoutSettings(message_generation_timeout=10, resource_processing_timeout=20)
+    created_at = int(time.time() * 1000) - 15000
+    message = _make_message(created_at=created_at)
+
+    result = service.estimate_message_timeout(message, timeout_settings)
+
+    assert result == 0

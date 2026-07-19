@@ -1,6 +1,10 @@
 from pydantic_settings import BaseSettings
 
 
+class MessageTimeoutSettings(BaseSettings):
+    message_generation_timeout: float = 10
+    resource_processing_timeout: float = 20 
+
 class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
