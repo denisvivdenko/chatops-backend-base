@@ -27,6 +27,7 @@ jobs:
       - name: Run tests
         env:
           APP_IMAGE: chatops-backend:${{ github.sha }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: docker compose --profile tests run --rm tests
 
       - name: Log in to Docker Hub
