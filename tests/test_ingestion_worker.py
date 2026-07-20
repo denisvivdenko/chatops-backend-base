@@ -8,7 +8,7 @@ import pytest
 from chatops.services.chat_service import ChatService
 from chatops.services.resource_service import ResourceService
 from chatops.stream.event_stream import EventStream
-from chatops.stream.ingestion_job_stream import IngestionJob
+from chatops.stream.job_stream import Job
 from chatops.workers.ingestion_worker import IngestionWorker
 
 from conftest import sleep_until_message_timed_out
@@ -88,7 +88,7 @@ def test_ingestion_worker_discards_job_for_nonexistent_message(authed_client, in
     chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
 
     infra["ingestion_job_stream"].publish(
-        IngestionJob(chat_id=chat_id, user_id=user_id, message_id="does-not-exist", resource_ids=("res-1",))
+        Job(chat_id=chat_id, user_id=user_id, message_id="does-not-exist", resource_ids=("res-1",))
     )
 
     # worker must discard the bogus job and keep processing subsequent ones

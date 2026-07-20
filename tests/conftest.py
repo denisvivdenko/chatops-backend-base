@@ -23,8 +23,7 @@ from chatops.api.dependencies import (
 from chatops.domain.chat import Message
 from chatops.settings import MessageTimeoutSettings, Settings
 from chatops.storage.resource_storage import ResourceStorage
-from chatops.stream.ingestion_job_stream import RedisIngestionJobStream
-from chatops.stream.job_stream import RedisJobStream
+from chatops.stream.job_stream import REDIS_INGESTION_JOBS_KEY, RedisJobStream
 from chatops.stream.event_stream import RedisEventStream
 from chatops.repositories.chat_repository import MongoChatRepository
 from chatops.repositories.refresh_token_repository import MongoRefreshTokenRepository
@@ -76,7 +75,7 @@ def infra(request):
         resource_storage=ResourceStorage(resource_storage_dir),
         redis_client=redis_client,
         job_stream=RedisJobStream(redis_client),
-        ingestion_job_stream=RedisIngestionJobStream(redis_client),
+        ingestion_job_stream=RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY),
         event_stream=RedisEventStream(redis_client),
     )
 

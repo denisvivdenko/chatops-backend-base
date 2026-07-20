@@ -10,7 +10,7 @@ from chatops.services.chat_service import (
     MessageNotFoundError,
 )
 from chatops.stream.event_stream import EventStream
-from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
+from chatops.stream.job_stream import Job, JobStream
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ DOCUMENT_PROCESSED_RESPONSE = "Document processed"
 class IngestionWorker:
     def __init__(
         self,
-        ingestion_jobs: IngestionJobStream,
+        ingestion_jobs: JobStream,
         chat_service: ChatService,
         event_stream: EventStream,
         processing_delay: float = 0.0,
@@ -54,7 +54,7 @@ class IngestionWorker:
             except TimeoutError:
                 pass
 
-    def _process(self, job: IngestionJob) -> None:
+    def _process(self, job: Job) -> None:
         logger.info("Received ingestion job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         try:
             message = self._service.get_message(job.chat_id, job.user_id, job.message_id)

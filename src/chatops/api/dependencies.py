@@ -11,8 +11,7 @@ from chatops.repositories.resource_repository import ResourceRepository, MongoRe
 from chatops.repositories.user_repository import UserRepository, MongoUserRepository
 from chatops.settings import Settings
 from chatops.storage.resource_storage import ResourceStorage
-from chatops.stream.ingestion_job_stream import IngestionJobStream, RedisIngestionJobStream
-from chatops.stream.job_stream import JobStream, RedisJobStream
+from chatops.stream.job_stream import JobStream, RedisJobStream, REDIS_INGESTION_JOBS_KEY
 from chatops.stream.event_stream import EventStream, RedisEventStream
 from chatops.services.auth_service import AuthService, InvalidAccessTokenError
 from chatops.services.chat_service import ChatService
@@ -65,8 +64,10 @@ def get_job_stream() -> JobStream:
     return RedisJobStream(get_redis_client(), timeout=get_settings().job_stream_timeout)
 
 
-def get_ingestion_job_stream() -> IngestionJobStream:
-    return RedisIngestionJobStream(get_redis_client(), timeout=get_settings().job_stream_timeout)
+def get_ingestion_job_stream() -> JobStream:
+    return RedisJobStream(
+        get_redis_client(), redis_key=REDIS_INGESTION_JOBS_KEY, timeout=get_settings().job_stream_timeout,
+    )
 
 
 def get_event_stream() -> EventStream:
@@ -102,7 +103,7 @@ ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
 ResourceServiceDep = Annotated[ResourceService, Depends(get_resource_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 JobStreamDep = Annotated[JobStream, Depends(get_job_stream)]
-IngestionJobStreamDep = Annotated[IngestionJobStream, Depends(get_ingestion_job_stream)]
+IngestionJobStreamDep = Annotated[JobStream, Depends(get_ingestion_job_stream)]
 EventStreamDep = Annotated[EventStream, Depends(get_event_stream)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 

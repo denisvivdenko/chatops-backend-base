@@ -5,8 +5,7 @@ from chatops.domain.chat import Chat, Message, MessageRole, MessageStatus
 from chatops.repositories.chat_repository import ChatRepository
 from chatops.services.resource_service import ResourceService
 from chatops.settings import MessageTimeoutSettings
-from chatops.stream.ingestion_job_stream import IngestionJob, IngestionJobStream
-from chatops.stream.job_stream import JobStream, AssistantJob
+from chatops.stream.job_stream import Job, JobStream
 
 
 class AssistantMessagePendingError(Exception):
@@ -54,7 +53,7 @@ class ChatService:
         self._resource_service = resource_service
 
     def create_chat(
-        self, first_message: str, user_id: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+        self, first_message: str, user_id: str, jobs_stream: JobStream, ingestion_jobs: JobStream,
     ) -> Chat:
         now = int(time.time() * 1000)
         chat = Chat(
@@ -69,7 +68,7 @@ class ChatService:
         return chat
 
     def send_message(
-        self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+        self, chat_id: str, user_id: str, content: str, jobs_stream: JobStream, ingestion_jobs: JobStream,
     ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
         resource_ids = self._resource_service.parse_resource_refs(content)
@@ -138,7 +137,7 @@ class ChatService:
         raise MessageNotFoundError()
 
     def retry_message(
-        self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream, ingestion_jobs: IngestionJobStream,
+        self, chat_id: str, user_id: str, message_id: str, jobs_stream: JobStream, ingestion_jobs: JobStream,
     ) -> Message:
         message = self.get_message(chat_id, user_id, message_id)
         if message.status != MessageStatus.FAILED:
@@ -163,7 +162,7 @@ class ChatService:
         message_id: str,
         content: str,
         jobs_stream: JobStream,
-        ingestion_jobs: IngestionJobStream,
+        ingestion_jobs: JobStream,
     ) -> Message:
         self._assert_owns_chat(chat_id, user_id)
         resource_ids = self._resource_service.parse_resource_refs(content)
@@ -229,14 +228,14 @@ class ChatService:
         message_id: str,
         resource_ids: list[str],
         jobs_stream: JobStream,
-        ingestion_jobs: IngestionJobStream,
+        ingestion_jobs: JobStream,
     ) -> None:
         if resource_ids:
-            ingestion_jobs.publish(IngestionJob(
+            ingestion_jobs.publish(Job(
                 chat_id=chat_id, user_id=user_id, message_id=message_id, resource_ids=tuple(resource_ids),
             ))
         else:
-            jobs_stream.publish(AssistantJob(chat_id=chat_id, user_id=user_id, message_id=message_id))
+            jobs_stream.publish(Job(chat_id=chat_id, user_id=user_id, message_id=message_id))
 
     def _transition_message_status(
         self, chat_id: str, user_id: str, message_id: str, status: MessageStatus, content: str | None = None,

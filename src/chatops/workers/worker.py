@@ -3,7 +3,7 @@ import threading
 import time
 
 from chatops.domain.chat import EOM, MessageStatus
-from chatops.stream.job_stream import JobStream, AssistantJob
+from chatops.stream.job_stream import Job, JobStream
 from chatops.stream.event_stream import EventStream
 from chatops.services.chat_service import ChatAccessDeniedError, ChatNotFoundError, ChatService, MessageNotFoundError
 
@@ -78,7 +78,7 @@ class Worker:
             except TimeoutError:
                 pass
 
-    def _process(self, job: AssistantJob) -> None:
+    def _process(self, job: Job) -> None:
         logger.info("Received job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         try:
             message = self._service.get_message(job.chat_id, job.user_id, job.message_id)
