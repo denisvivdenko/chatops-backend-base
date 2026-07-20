@@ -5,7 +5,7 @@ from chatops.domain.chat import EOM, MessageStatus
 from chatops.services.chat_service import ChatAccessDeniedError, ChatNotFoundError, ChatService, MessageNotFoundError
 from chatops.stream.event_stream import EventStream
 from chatops.stream.job_stream import Job, JobStream
-from chatops.workers.response_generator import MessageGeneration, ResponseGenerator
+from chatops.workers.response_generator import ResponseGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +80,13 @@ if __name__ == "__main__":
         get_chat_repository,
         get_event_stream,
         get_job_stream,
+        get_openai_client,
         get_resource_repository,
         get_resource_service,
         get_resource_storage,
+        get_settings,
     )
+    from chatops.workers.llm_message_generator import LLMMessageGenerator
 
     chat_service = ChatService(
         chat_repository=get_chat_repository(),
@@ -94,5 +97,7 @@ if __name__ == "__main__":
         jobs_stream=get_job_stream(),
         chat_service=chat_service,
         event_stream=get_event_stream(),
-        response_generator=MessageGeneration(),
+        response_generator=LLMMessageGenerator(
+            chat_service=chat_service, client=get_openai_client(), model=get_settings().openai_model,
+        ),
     ).start().join()

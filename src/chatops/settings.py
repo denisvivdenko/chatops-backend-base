@@ -2,8 +2,8 @@ from pydantic_settings import BaseSettings
 
 
 class MessageTimeoutSettings(BaseSettings):
-    message_generation_timeout: float = 10
-    resource_processing_timeout: float = 20 
+    message_generation_timeout: float = 30
+    resource_processing_timeout: float = 60
 
 class Settings(BaseSettings):
     message_timeout: MessageTimeoutSettings = MessageTimeoutSettings()
@@ -18,3 +18,5 @@ class Settings(BaseSettings):
     access_token_ttl: float = 900
     refresh_token_ttl: float = 60 * 60 * 24 * 14
     resource_storage_dir: str = "/data/resources"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"

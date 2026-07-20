@@ -25,6 +25,8 @@ services:
     environment:
       REDIS_HOST: redis
       MONGO_HOST: mongo
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     depends_on:
       redis:
         condition: service_healthy
@@ -73,6 +75,7 @@ services:
     environment:
       REDIS_HOST: redis
       MONGO_HOST: mongo
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy

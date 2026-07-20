@@ -1,10 +1,10 @@
 .PHONY: deploy test
 
 deploy:
-	docker compose --profile deploy up --build --no-attach mongo
+	docker compose --env-file .env --profile deploy up --build --no-attach mongo
 
 deploy-without-worker:
-	docker compose --profile deploy-without-worker up --build
+	docker compose --env-file .env --profile deploy-without-worker up --build
 
 build:
 	docker compose build api worker

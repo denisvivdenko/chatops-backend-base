@@ -4,6 +4,7 @@ from typing import Annotated
 import pymongo
 import redis as redis_lib
 from fastapi import Depends, Header, HTTPException
+from openai import OpenAI
 
 from chatops.repositories.chat_repository import ChatRepository, MongoChatRepository
 from chatops.repositories.refresh_token_repository import RefreshTokenRepository, MongoRefreshTokenRepository
@@ -33,6 +34,11 @@ def get_redis_client() -> redis_lib.Redis:
 def get_mongo_client() -> pymongo.MongoClient:
     settings = get_settings()
     return pymongo.MongoClient(settings.mongo_host, settings.mongo_port)
+
+
+@lru_cache
+def get_openai_client() -> OpenAI:
+    return OpenAI(api_key=get_settings().openai_api_key)
 
 
 @lru_cache
