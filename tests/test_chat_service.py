@@ -11,7 +11,7 @@ from chatops.services.chat_service import (
 from chatops.services.resource_service import ResourceService
 from chatops.domain.chat import Message, MessageRole, MessageStatus
 from chatops.settings import Settings, MessageTimeoutSettings
-from chatops.workers.worker import TEST_RESPONSE
+from chatops.workers.response_generator import TEST_RESPONSE
 from chatops.stream.message_observer import MessageObserver
 
 FAIL_MESSAGE_AFTER_TIMEOUT = Settings().message_timeout.message_generation_timeout

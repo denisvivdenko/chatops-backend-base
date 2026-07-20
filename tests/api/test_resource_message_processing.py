@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from chatops.workers.ingestion_worker import DOCUMENT_PROCESSED_RESPONSE
+from chatops.workers.response_generator import DOCUMENT_PROCESSED_RESPONSE
 from conftest import sleep_until_message_timed_out
 
 PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"

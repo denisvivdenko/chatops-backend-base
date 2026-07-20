@@ -31,8 +31,8 @@ from chatops.repositories.resource_repository import MongoResourceRepository
 from chatops.repositories.user_repository import MongoUserRepository
 from chatops.services.chat_service import ChatService
 from chatops.services.resource_service import ResourceService
-from chatops.workers.worker import Worker, TEST_RESPONSE
-from chatops.workers.ingestion_worker import IngestionWorker
+from chatops.workers.worker import Worker
+from chatops.workers.response_generator import MessageGeneration, ResourceIngestion, TEST_RESPONSE
 
 MONGO_TEST_DB = "chatops_test"
 
@@ -142,7 +142,7 @@ def worker(infra, settings):
         jobs_stream=infra["job_stream"],
         chat_service=chat_service,
         event_stream=_make_event_stream(infra, settings),
-        response=TEST_RESPONSE,
+        response_generator=MessageGeneration(response=TEST_RESPONSE),
     ).start()
     yield w
     w.stop()
@@ -167,10 +167,11 @@ def authed_client_with_worker(client_with_worker):
 def ingestion_worker(infra, settings):
     resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
     chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
-    w = IngestionWorker(
-        ingestion_jobs=infra["ingestion_job_stream"],
+    w = Worker(
+        jobs_stream=infra["ingestion_job_stream"],
         chat_service=chat_service,
         event_stream=_make_event_stream(infra, settings),
+        response_generator=ResourceIngestion(),
     ).start()
     yield w
     w.stop()

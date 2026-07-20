@@ -1,42 +1,11 @@
 import logging
 import threading
-import time
 
 from chatops.domain.chat import EOM, MessageStatus
-from chatops.stream.job_stream import Job, JobStream
-from chatops.stream.event_stream import EventStream
 from chatops.services.chat_service import ChatAccessDeniedError, ChatNotFoundError, ChatService, MessageNotFoundError
-
-HARDCODED_RESPONSE = """
-## Markdown support
-
-This response demonstrates **bold**, *italic*, and `inline code`.
-
-### Lists
-
-- Unordered items work fine
-- As do nested concepts
-
-1. Ordered lists too
-2. With multiple entries
-
-### Code blocks
-
-```ts
-function greet(name: string): string {
-  return `Hello, ${name}!`;
-}
-```
-
-> Blockquotes are also supported for callouts or citations.
-
----
-
-Let me know what you'd like to explore next.`;
-"""
-
-
-TEST_RESPONSE = HARDCODED_RESPONSE[:12]
+from chatops.stream.event_stream import EventStream
+from chatops.stream.job_stream import Job, JobStream
+from chatops.workers.response_generator import MessageGeneration, ResponseGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +16,12 @@ class Worker:
         jobs_stream: JobStream,
         chat_service: ChatService,
         event_stream: EventStream,
-        response: str = HARDCODED_RESPONSE,
+        response_generator: ResponseGenerator,
     ) -> None:
         self._jobs = jobs_stream
         self._service = chat_service
         self._event_stream = event_stream
-        self._response = response
+        self._response_generator = response_generator
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -92,11 +61,11 @@ class Worker:
             return
         try:
             stream_key = self._event_stream.stream_key(job.chat_id, job.message_id)
-            chunk_size = 6
-            for i in range(0, len(self._response), chunk_size):
-                self._event_stream.write(stream_key, {"token": self._response[i:i + chunk_size]})
-                time.sleep(0.1)
-            self._service.complete_message(job.chat_id, job.user_id, job.message_id, self._response)
+            chunks: list[str] = []
+            for chunk in self._response_generator.generate(job):
+                chunks.append(chunk)
+                self._event_stream.write(stream_key, {"token": chunk})
+            self._service.complete_message(job.chat_id, job.user_id, job.message_id, "".join(chunks))
             self._event_stream.write(stream_key, {"token": EOM})
             logger.info("Finished job chat_id=%s message_id=%s", job.chat_id, job.message_id)
         except Exception:
@@ -116,14 +85,14 @@ if __name__ == "__main__":
         get_resource_storage,
     )
 
-    job_stream = get_job_stream()
     chat_service = ChatService(
         chat_repository=get_chat_repository(),
         resource_service=get_resource_service(repo=get_resource_repository(), storage=get_resource_storage()),
     )
 
     Worker(
-        jobs_stream=job_stream,
+        jobs_stream=get_job_stream(),
         chat_service=chat_service,
         event_stream=get_event_stream(),
+        response_generator=MessageGeneration(),
     ).start().join()

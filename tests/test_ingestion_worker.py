@@ -9,7 +9,8 @@ from chatops.services.chat_service import ChatService
 from chatops.services.resource_service import ResourceService
 from chatops.stream.event_stream import EventStream
 from chatops.stream.job_stream import Job
-from chatops.workers.ingestion_worker import IngestionWorker
+from chatops.workers.response_generator import ResourceIngestion
+from chatops.workers.worker import Worker
 
 from conftest import sleep_until_message_timed_out
 
@@ -33,11 +34,12 @@ def _upload_resource(authed_client, filename: str) -> str:
 
 
 @pytest.fixture
-def ingestion_worker(infra) -> Iterator[IngestionWorker]:
-    w = IngestionWorker(
-        ingestion_jobs=infra["ingestion_job_stream"],
+def ingestion_worker(infra) -> Iterator[Worker]:
+    w = Worker(
+        jobs_stream=infra["ingestion_job_stream"],
         chat_service=_make_service(infra),
         event_stream=infra["event_stream"],
+        response_generator=ResourceIngestion(),
     ).start()
     yield w
     w.stop()
@@ -109,8 +111,9 @@ def test_ingestion_worker_fails_message_on_processing_exception(authed_client, i
 
     broken_event_stream = MagicMock(spec=EventStream)
     broken_event_stream.write.side_effect = RuntimeError("boom")
-    worker = IngestionWorker(
-        ingestion_jobs=infra["ingestion_job_stream"], chat_service=_make_service(infra), event_stream=broken_event_stream,
+    worker = Worker(
+        jobs_stream=infra["ingestion_job_stream"], chat_service=_make_service(infra), event_stream=broken_event_stream,
+        response_generator=ResourceIngestion(),
     ).start()
     try:
         time.sleep(0.3)
