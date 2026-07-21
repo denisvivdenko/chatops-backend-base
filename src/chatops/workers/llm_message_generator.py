@@ -1,3 +1,4 @@
+import re
 from typing import Iterator
 
 from openai import OpenAI
@@ -11,6 +12,24 @@ _ROLE_MAP = {
     MessageRole.USER: "user",
     MessageRole.ASSISTANT: "assistant",
 }
+
+_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\((data:image/[^;]+;base64,[^)]+)\)")
+
+
+def _parse_content(content: str) -> str | list[dict]:
+    parts = _IMAGE_PATTERN.split(content)
+    if len(parts) == 1:
+        return content
+
+    blocks: list[dict] = []
+    for index, part in enumerate(parts):
+        if index % 2 == 0:
+            text = part.strip()
+            if text:
+                blocks.append({"type": "text", "text": text})
+        else:
+            blocks.append({"type": "image_url", "image_url": {"url": part}})
+    return blocks
 
 
 class LLMMessageGenerator(ResponseGenerator):
@@ -29,7 +48,7 @@ class LLMMessageGenerator(ResponseGenerator):
     def generate(self, job: Job) -> Iterator[str]:
         history = self._service.fetch_messages(job.chat_id, job.user_id)
         messages = [
-            {"role": _ROLE_MAP[message.role], "content": message.content}
+            {"role": _ROLE_MAP[message.role], "content": _parse_content(message.content)}
             for message in history
             if message.id != job.message_id
         ]
