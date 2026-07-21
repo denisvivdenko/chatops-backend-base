@@ -1,3 +1,5 @@
+import base64
+from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -12,11 +14,17 @@ from chatops.workers.worker import Worker
 
 USER_ID = "test-user"
 MODEL = "gpt-4o-mini"
+IMAGES_DIR = Path(__file__).parent / "fixtures" / "images"
 
 
 def _make_service(infra) -> ChatService:
     resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
     return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
+
+
+def _image_markdown(filename: str) -> str:
+    encoded = base64.b64encode((IMAGES_DIR / filename).read_bytes()).decode()
+    return f"![image-name](data:image/png;base64,{encoded})"
 
 
 @pytest.fixture
@@ -72,6 +80,42 @@ def test_generate_applies_system_prompt(infra, openai_client) -> None:
     assert "banana" in result.lower()
 
 
+@pytest.mark.parametrize("order", [
+    ("circle", "triangle", "rectangle"),
+    ("triangle", "rectangle", "circle"),
+    ("rectangle", "circle", "triangle"),
+], ids=["circle-triangle-rectangle", "triangle-rectangle-circle", "rectangle-circle-triangle"])
+def test_generate_sees_images_submitted_across_messages_in_order(infra, openai_client, order) -> None:
+    service = _make_service(infra)
+    jobs_stream, ingestion_jobs = infra["job_stream"], infra["ingestion_job_stream"]
+    first, second, third = order
+
+    chat = service.create_chat(f"{_image_markdown(f'{first}.png')}\nHere is an image.", USER_ID, jobs_stream, ingestion_jobs)
+    reply = service.fetch_messages(chat.id, USER_ID)[-1]
+    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
+
+    service.send_message(chat.id, USER_ID, f"{_image_markdown(f'{second}.png')}\nHere is another image.", jobs_stream, ingestion_jobs)
+    reply = service.fetch_messages(chat.id, USER_ID)[-1]
+    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
+
+    service.send_message(chat.id, USER_ID, f"{_image_markdown(f'{third}.png')}\nHere is another image.", jobs_stream, ingestion_jobs)
+    reply = service.fetch_messages(chat.id, USER_ID)[-1]
+    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
+
+    assistant = service.send_message(
+        chat.id, USER_ID,
+        "List, in the order I showed them, the shapes drawn in the three images I sent you. "
+        "Reply with just the three shape names separated by commas, nothing else.",
+        jobs_stream, ingestion_jobs,
+    )
+
+    generator = LLMMessageGenerator(chat_service=service, client=openai_client, model=MODEL)
+    result = "".join(generator.generate(Job(chat_id=chat.id, user_id=USER_ID, message_id=assistant.id))).lower()
+    print(result)
+    assert first in result and second in result and third in result
+    assert result.index(first) < result.index(second) < result.index(third)
+
+
 @pytest.fixture
 def llm_worker(infra, openai_client) -> Iterator[Worker]:
     chat_service = _make_service(infra)
@@ -86,7 +130,7 @@ def llm_worker(infra, openai_client) -> Iterator[Worker]:
 
 
 def test_message_generated_via_llm_worker_completes_end_to_end(authed_client, llm_worker) -> None:
-    chat_id = authed_client.post("/api/chats", json={"message": "Reply with exactly one word: PONG"}).json()["id"]
+    chat_id = authed_client.post("/api/chats", json={"message": "Reply with exactly one word: 'PONG'"}).json()["id"]
     assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
 
     with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
