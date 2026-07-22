@@ -66,6 +66,12 @@ class ResourceService:
     def assert_owns_resource(self, resource_id: str, user_id: str) -> None:
         self._fetch_owned_resource(resource_id, user_id)
 
+    def get_resource(self, resource_id: str, user_id: str) -> Resource:
+        return self._fetch_owned_resource(resource_id, user_id)
+
+    def read_resource_content(self, resource: Resource) -> bytes:
+        return self._storage.read(resource.file_path)
+
     def delete_resource(self, resource_id: str, user_id: str) -> None:
         resource = self._fetch_owned_resource(resource_id, user_id)
         self._repo.delete_resource(resource_id)
