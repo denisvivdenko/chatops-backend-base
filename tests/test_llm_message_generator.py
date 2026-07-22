@@ -10,11 +10,13 @@ from chatops.services.resource_service import ResourceService
 from chatops.settings import Settings
 from chatops.stream.job_stream import Job
 from chatops.workers.llm_message_generator import LLMMessageGenerator
+from chatops.workers.llm_resource_ingestion import LLMResourceIngestion
 from chatops.workers.worker import Worker
 
 USER_ID = "test-user"
 MODEL = "gpt-4o-mini"
 IMAGES_DIR = Path(__file__).parent / "fixtures" / "images"
+DOCUMENTS_DIR = Path(__file__).parent / "fixtures" / "documents"
 
 
 def _make_service(infra) -> ChatService:
@@ -139,3 +141,46 @@ def test_message_generated_via_llm_worker_completes_end_to_end(authed_client, ll
     messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
     assert messages[1]["status"] == "complete"
     assert "pong" in messages[1]["content"].lower()
+
+
+@pytest.fixture
+def llm_ingestion_worker(infra, openai_client) -> Iterator[Worker]:
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
+    w = Worker(
+        jobs_stream=infra["ingestion_job_stream"],
+        chat_service=chat_service,
+        event_stream=infra["event_stream"],
+        response_generator=LLMResourceIngestion(resource_service=resource_service, client=openai_client, model=MODEL),
+    ).start()
+    yield w
+    w.stop()
+
+
+def test_generate_answers_question_about_uploaded_document(authed_client, llm_ingestion_worker, llm_worker) -> None:
+    pdf_bytes = (DOCUMENTS_DIR / "report.pdf").read_bytes()
+    resource_id = authed_client.post(
+        "/api/upload-resource", files={"file": ("report.pdf", pdf_bytes, "application/pdf")},
+    ).json()["id"]
+
+    chat_id = authed_client.post(
+        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
+    ).json()["id"]
+    ingestion_assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    with authed_client.stream(
+        "GET", f"/api/chats/{chat_id}/messages/{ingestion_assistant_id}/stream"
+    ) as resp:
+        list(resp.iter_lines())
+    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
+
+    authed_client.post(
+        f"/api/chats/{chat_id}/messages",
+        json={"content": "What is the launch code mentioned in the document? Reply with just the code, nothing else."},
+    )
+    answer_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[3]["id"]
+    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{answer_id}/stream") as resp:
+        list(resp.iter_lines())
+
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
+    assert messages[3]["status"] == "complete"
+    assert "bluebird-7" in messages[3]["content"].lower()
