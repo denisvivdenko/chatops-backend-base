@@ -1,6 +1,3 @@
-import os
-from typing import Iterator
-
 import pymongo
 import pytest
 
@@ -11,15 +8,8 @@ MONGO_TEST_DB = "chatops_test"
 
 
 @pytest.fixture
-def resource_repo() -> Iterator[MongoResourceRepository]:
-    mongo_host = os.environ.get("MONGO_HOST", "localhost")
-    mongo_client = pymongo.MongoClient(mongo_host, 27017)
-    mongo_client.drop_database(MONGO_TEST_DB)
-
-    yield MongoResourceRepository(mongo_client, db_name=MONGO_TEST_DB)
-
-    mongo_client.drop_database(MONGO_TEST_DB)
-    mongo_client.close()
+def resource_repo(mongo_client: pymongo.MongoClient) -> MongoResourceRepository:
+    return MongoResourceRepository(mongo_client, db_name=MONGO_TEST_DB)
 
 
 def test_save_and_fetch_resource_round_trip(resource_repo: MongoResourceRepository) -> None:

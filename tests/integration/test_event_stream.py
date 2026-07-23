@@ -1,7 +1,6 @@
-import os
 import time
 from functools import partial
-from typing import Callable, Iterator
+from typing import Callable
 
 import pytest
 import redis as redis_lib
@@ -11,18 +10,9 @@ from chatops.stream.event_stream import EventStream, RedisEventStream
 StreamFactory = Callable[..., EventStream]
 
 
-@pytest.fixture(params=[
-    pytest.param("redis", marks=pytest.mark.integration),
-])
-def make_stream(request: pytest.FixtureRequest) -> Iterator[StreamFactory]:
-    redis_host = os.environ.get("REDIS_HOST", "localhost")
-    client = redis_lib.Redis(host=redis_host, port=6379, db=1)
-    client.flushdb()
-
-    yield partial(RedisEventStream, client)
-
-    client.flushdb()
-    client.close()
+@pytest.fixture
+def make_stream(redis_client: redis_lib.Redis) -> StreamFactory:
+    return partial(RedisEventStream, redis_client)
 
 
 @pytest.mark.asyncio
