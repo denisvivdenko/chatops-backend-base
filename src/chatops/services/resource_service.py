@@ -72,11 +72,6 @@ class ResourceService:
     def read_resource_content(self, resource: Resource) -> bytes:
         return self._storage.read(resource.file_path)
 
-    def delete_resource(self, resource_id: str, user_id: str) -> None:
-        resource = self._fetch_owned_resource(resource_id, user_id)
-        self._repo.delete_resource(resource_id)
-        self._storage.delete(resource.file_path)
-
     def delete_resource_by_name(self, user_id: str, filename: str) -> None:
         resource = next((r for r in self._repo.fetch_resources(user_id) if r.filename == filename), None)
         if resource is None:

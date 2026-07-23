@@ -56,3 +56,17 @@ def test_delete_resource_removes_it(resource_repo: MongoResourceRepository) -> N
 
     with pytest.raises(KeyError):
         resource_repo.fetch_resource("r1")
+
+
+def test_delete_resource_leaves_other_users_resource_with_same_filename_untouched(
+    resource_repo: MongoResourceRepository,
+) -> None:
+    resource_a = Resource(id="r1", user_id="user-1", filename="a.pdf", file_path="/data/resources/r1", created_at=1)
+    resource_b = Resource(id="r2", user_id="user-2", filename="a.pdf", file_path="/data/resources/r2", created_at=2)
+    resource_repo.save_resource(resource_a)
+    resource_repo.save_resource(resource_b)
+
+    resource_repo.delete_resource(resource_a.id)
+
+    assert resource_repo.fetch_resources("user-1") == []
+    assert resource_repo.fetch_resource(resource_b.id) == resource_b
