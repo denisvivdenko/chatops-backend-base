@@ -15,5 +15,6 @@ dependencies = [
     "pymongo>=4.17.0",
     "pytest>=9.1.0",
     "pytest-asyncio>=1.4.0",
+    "pytest-rerunfailures>=16.4",
     "redis>=8.0.1",
 ]

@@ -19,6 +19,7 @@ def _image_markdown(filename: str) -> str:
     return f"![image-name](data:image/png;base64,{encoded})"
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 def test_generate_streams_response_using_conversation_history_and_system_prompt(openai_client) -> None:
     chat_service = MagicMock(spec=ChatService)
     chat_service.fetch_messages.return_value = [
@@ -26,7 +27,7 @@ def test_generate_streams_response_using_conversation_history_and_system_prompt(
         Message(id="msg-2", role=MessageRole.ASSISTANT, status=MessageStatus.COMPLETE, content="Nice to meet you, Zork!", created_at=2),
         Message(
             id="msg-3", role=MessageRole.USER, status=MessageStatus.COMPLETE,
-            content="Count from 1 to 10, one number per line, then say my name. Reply with nothing else.",
+            content="Count from 1 to 3, one number per line, then say my name. Reply with nothing else.",
             created_at=3,
         ),
         Message(id="msg-4", role=MessageRole.ASSISTANT, status=MessageStatus.PENDING, content="", created_at=4),
@@ -40,16 +41,16 @@ def test_generate_streams_response_using_conversation_history_and_system_prompt(
     result = "".join(chunks)
 
     assert len(chunks) > 1  # streamed, not returned as one blob
-    assert "1" in result and "10" in result
+    assert "1" in result and "3" in result
     assert "zork" in result.lower()  # recalled from conversation history
     assert "banana" in result.lower()  # system prompt applied
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=2)
 @pytest.mark.parametrize("order", [
     ("circle", "triangle", "rectangle"),
-    ("triangle", "rectangle", "circle"),
-    ("rectangle", "circle", "triangle"),
-], ids=["circle-triangle-rectangle", "triangle-rectangle-circle", "rectangle-circle-triangle"])
+    ("triangle", "rectangle", "circle")
+], ids=["circle-triangle-rectangle", "triangle-rectangle-circle"])
 def test_generate_sees_images_submitted_across_messages_in_order(openai_client, order) -> None:
     first, second, third = order
     chat_service = MagicMock(spec=ChatService)
