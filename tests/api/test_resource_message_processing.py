@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 import pytest
 
@@ -6,6 +7,7 @@ from chatops.workers.response_generator import DOCUMENT_PROCESSED_RESPONSE
 from conftest import sleep_until_message_timed_out
 
 PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
+DOCUMENTS_DIR = Path(__file__).parent.parent / "fixtures" / "documents"
 
 
 def _upload_resource(client) -> str:
@@ -146,3 +148,32 @@ def test_modify_message_adding_resource_ref_is_processed_by_ingestion_worker(aut
     assert messages[1]["id"] == new_assistant_id
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == DOCUMENT_PROCESSED_RESPONSE
+
+
+def test_generate_answers_question_about_uploaded_document(authed_client, llm_ingestion_worker, llm_worker) -> None:
+    pdf_bytes = (DOCUMENTS_DIR / "report.pdf").read_bytes()
+    resource_id = authed_client.post(
+        "/api/upload-resource", files={"file": ("report.pdf", pdf_bytes, "application/pdf")},
+    ).json()["id"]
+
+    chat_id = authed_client.post(
+        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
+    ).json()["id"]
+    ingestion_assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    with authed_client.stream(
+        "GET", f"/api/chats/{chat_id}/messages/{ingestion_assistant_id}/stream"
+    ) as resp:
+        list(resp.iter_lines())
+    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
+
+    authed_client.post(
+        f"/api/chats/{chat_id}/messages",
+        json={"content": "What is the launch code mentioned in the document? Reply with just the code, nothing else."},
+    )
+    answer_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[3]["id"]
+    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{answer_id}/stream") as resp:
+        list(resp.iter_lines())
+
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
+    assert messages[3]["status"] == "complete"
+    assert "bluebird-7" in messages[3]["content"].lower()

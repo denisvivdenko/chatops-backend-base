@@ -95,3 +95,15 @@ def test_reopening_stream_after_generation_timeout_receives_error(authed_client_
     assert not any(line.startswith("data: ") for line in lines_before_error)
     data_line = lines[lines.index("event: error") + 1]
     assert json.loads(data_line.removeprefix("data: ")) == {"error": "message_generation_timeout"}
+
+
+def test_message_generated_via_llm_worker_completes_end_to_end(authed_client, llm_worker) -> None:
+    chat_id = authed_client.post("/api/chats", json={"message": "Reply with exactly one word: 'PONG'"}).json()["id"]
+    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+
+    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
+        list(resp.iter_lines())
+
+    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
+    assert messages[1]["status"] == "complete"
+    assert "pong" in messages[1]["content"].lower()

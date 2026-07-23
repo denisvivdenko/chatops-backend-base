@@ -1,27 +1,17 @@
 import base64
 from pathlib import Path
-from typing import Iterator
+from unittest.mock import MagicMock
 
 import pytest
-from openai import OpenAI
 
+from chatops.domain.chat import Message, MessageRole, MessageStatus
 from chatops.services.chat_service import ChatService
-from chatops.services.resource_service import ResourceService
-from chatops.settings import Settings
 from chatops.stream.job_stream import Job
 from chatops.workers.llm_message_generator import LLMMessageGenerator
-from chatops.workers.llm_resource_ingestion import LLMResourceIngestion
-from chatops.workers.worker import Worker
 
 USER_ID = "test-user"
 MODEL = "gpt-4o-mini"
 IMAGES_DIR = Path(__file__).parent / "fixtures" / "images"
-DOCUMENTS_DIR = Path(__file__).parent / "fixtures" / "documents"
-
-
-def _make_service(infra) -> ChatService:
-    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
-    return ChatService(chat_repository=infra["repo"], resource_service=resource_service)
 
 
 def _image_markdown(filename: str) -> str:
@@ -29,57 +19,30 @@ def _image_markdown(filename: str) -> str:
     return f"![image-name](data:image/png;base64,{encoded})"
 
 
-@pytest.fixture
-def openai_client(settings: Settings) -> OpenAI:
-    if not settings.openai_api_key:
-        pytest.skip("OPENAI_API_KEY not set")
-    return OpenAI(api_key=settings.openai_api_key)
-
-
-def test_generate_streams_response_in_multiple_chunks(infra, openai_client) -> None:
-    service = _make_service(infra)
-    jobs_stream, ingestion_jobs = infra["job_stream"], infra["ingestion_job_stream"]
-    chat = service.create_chat("Count from 1 to 10, one number per line, nothing else.", USER_ID, jobs_stream, ingestion_jobs)
-    assistant = service.fetch_messages(chat.id, USER_ID)[1]
-
-    generator = LLMMessageGenerator(chat_service=service, client=openai_client, model=MODEL)
-    chunks = list(generator.generate(Job(chat_id=chat.id, user_id=USER_ID, message_id=assistant.id)))
-
-    assert len(chunks) > 1
-    result = "".join(chunks)
-    assert "1" in result and "10" in result
-
-
-def test_generate_uses_conversation_history_for_context(infra, openai_client) -> None:
-    service = _make_service(infra)
-    jobs_stream, ingestion_jobs = infra["job_stream"], infra["ingestion_job_stream"]
-
-    chat = service.create_chat("My name is Zork.", USER_ID, jobs_stream, ingestion_jobs)
-    first_reply = service.fetch_messages(chat.id, USER_ID)[1]
-    service.complete_message(chat.id, USER_ID, first_reply.id, "Nice to meet you, Zork!")
-    assistant = service.send_message(
-        chat.id, USER_ID, "What is my name? Reply with just the name, nothing else.", jobs_stream, ingestion_jobs,
-    )
-
-    generator = LLMMessageGenerator(chat_service=service, client=openai_client, model=MODEL)
-    result = "".join(generator.generate(Job(chat_id=chat.id, user_id=USER_ID, message_id=assistant.id)))
-
-    assert "zork" in result.lower()
-
-
-def test_generate_applies_system_prompt(infra, openai_client) -> None:
-    service = _make_service(infra)
-    jobs_stream, ingestion_jobs = infra["job_stream"], infra["ingestion_job_stream"]
-    chat = service.create_chat("Say hello.", USER_ID, jobs_stream, ingestion_jobs)
-    assistant = service.fetch_messages(chat.id, USER_ID)[1]
+def test_generate_streams_response_using_conversation_history_and_system_prompt(openai_client) -> None:
+    chat_service = MagicMock(spec=ChatService)
+    chat_service.fetch_messages.return_value = [
+        Message(id="msg-1", role=MessageRole.USER, status=MessageStatus.COMPLETE, content="My name is Zork.", created_at=1),
+        Message(id="msg-2", role=MessageRole.ASSISTANT, status=MessageStatus.COMPLETE, content="Nice to meet you, Zork!", created_at=2),
+        Message(
+            id="msg-3", role=MessageRole.USER, status=MessageStatus.COMPLETE,
+            content="Count from 1 to 10, one number per line, then say my name. Reply with nothing else.",
+            created_at=3,
+        ),
+        Message(id="msg-4", role=MessageRole.ASSISTANT, status=MessageStatus.PENDING, content="", created_at=4),
+    ]
 
     generator = LLMMessageGenerator(
-        chat_service=service, client=openai_client, model=MODEL,
+        chat_service=chat_service, client=openai_client, model=MODEL,
         system_prompt="No matter what you are asked, always end your response with the exact word 'BANANA'.",
     )
-    result = "".join(generator.generate(Job(chat_id=chat.id, user_id=USER_ID, message_id=assistant.id)))
+    chunks = list(generator.generate(Job(chat_id="chat-1", user_id=USER_ID, message_id="msg-4")))
+    result = "".join(chunks)
 
-    assert "banana" in result.lower()
+    assert len(chunks) > 1  # streamed, not returned as one blob
+    assert "1" in result and "10" in result
+    assert "zork" in result.lower()  # recalled from conversation history
+    assert "banana" in result.lower()  # system prompt applied
 
 
 @pytest.mark.parametrize("order", [
@@ -87,100 +50,38 @@ def test_generate_applies_system_prompt(infra, openai_client) -> None:
     ("triangle", "rectangle", "circle"),
     ("rectangle", "circle", "triangle"),
 ], ids=["circle-triangle-rectangle", "triangle-rectangle-circle", "rectangle-circle-triangle"])
-def test_generate_sees_images_submitted_across_messages_in_order(infra, openai_client, order) -> None:
-    service = _make_service(infra)
-    jobs_stream, ingestion_jobs = infra["job_stream"], infra["ingestion_job_stream"]
+def test_generate_sees_images_submitted_across_messages_in_order(openai_client, order) -> None:
     first, second, third = order
+    chat_service = MagicMock(spec=ChatService)
+    chat_service.fetch_messages.return_value = [
+        Message(
+            id="msg-1", role=MessageRole.USER, status=MessageStatus.COMPLETE,
+            content=f"{_image_markdown(f'{first}.png')}\nHere is an image.", created_at=1,
+        ),
+        Message(id="msg-2", role=MessageRole.ASSISTANT, status=MessageStatus.COMPLETE, content="Got it.", created_at=2),
+        Message(
+            id="msg-3", role=MessageRole.USER, status=MessageStatus.COMPLETE,
+            content=f"{_image_markdown(f'{second}.png')}\nHere is another image.", created_at=3,
+        ),
+        Message(id="msg-4", role=MessageRole.ASSISTANT, status=MessageStatus.COMPLETE, content="Got it.", created_at=4),
+        Message(
+            id="msg-5", role=MessageRole.USER, status=MessageStatus.COMPLETE,
+            content=f"{_image_markdown(f'{third}.png')}\nHere is another image.", created_at=5,
+        ),
+        Message(id="msg-6", role=MessageRole.ASSISTANT, status=MessageStatus.COMPLETE, content="Got it.", created_at=6),
+        Message(
+            id="msg-7", role=MessageRole.USER, status=MessageStatus.COMPLETE,
+            content=(
+                "List, in the order I showed them, the shapes drawn in the three images I sent you. "
+                "Reply with just the three shape names separated by commas, nothing else."
+            ),
+            created_at=7,
+        ),
+        Message(id="msg-8", role=MessageRole.ASSISTANT, status=MessageStatus.PENDING, content="", created_at=8),
+    ]
 
-    chat = service.create_chat(f"{_image_markdown(f'{first}.png')}\nHere is an image.", USER_ID, jobs_stream, ingestion_jobs)
-    reply = service.fetch_messages(chat.id, USER_ID)[-1]
-    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
+    generator = LLMMessageGenerator(chat_service=chat_service, client=openai_client, model=MODEL)
+    result = "".join(generator.generate(Job(chat_id="chat-1", user_id=USER_ID, message_id="msg-8"))).lower()
 
-    service.send_message(chat.id, USER_ID, f"{_image_markdown(f'{second}.png')}\nHere is another image.", jobs_stream, ingestion_jobs)
-    reply = service.fetch_messages(chat.id, USER_ID)[-1]
-    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
-
-    service.send_message(chat.id, USER_ID, f"{_image_markdown(f'{third}.png')}\nHere is another image.", jobs_stream, ingestion_jobs)
-    reply = service.fetch_messages(chat.id, USER_ID)[-1]
-    service.complete_message(chat.id, USER_ID, reply.id, "Got it.")
-
-    assistant = service.send_message(
-        chat.id, USER_ID,
-        "List, in the order I showed them, the shapes drawn in the three images I sent you. "
-        "Reply with just the three shape names separated by commas, nothing else.",
-        jobs_stream, ingestion_jobs,
-    )
-
-    generator = LLMMessageGenerator(chat_service=service, client=openai_client, model=MODEL)
-    result = "".join(generator.generate(Job(chat_id=chat.id, user_id=USER_ID, message_id=assistant.id))).lower()
-    print(result)
     assert first in result and second in result and third in result
     assert result.index(first) < result.index(second) < result.index(third)
-
-
-@pytest.fixture
-def llm_worker(infra, openai_client) -> Iterator[Worker]:
-    chat_service = _make_service(infra)
-    w = Worker(
-        jobs_stream=infra["job_stream"],
-        chat_service=chat_service,
-        event_stream=infra["event_stream"],
-        response_generator=LLMMessageGenerator(chat_service=chat_service, client=openai_client, model=MODEL),
-    ).start()
-    yield w
-    w.stop()
-
-
-def test_message_generated_via_llm_worker_completes_end_to_end(authed_client, llm_worker) -> None:
-    chat_id = authed_client.post("/api/chats", json={"message": "Reply with exactly one word: 'PONG'"}).json()["id"]
-    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-
-    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
-        list(resp.iter_lines())
-
-    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
-    assert messages[1]["status"] == "complete"
-    assert "pong" in messages[1]["content"].lower()
-
-
-@pytest.fixture
-def llm_ingestion_worker(infra, openai_client) -> Iterator[Worker]:
-    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
-    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
-    w = Worker(
-        jobs_stream=infra["ingestion_job_stream"],
-        chat_service=chat_service,
-        event_stream=infra["event_stream"],
-        response_generator=LLMResourceIngestion(resource_service=resource_service, client=openai_client, model=MODEL),
-    ).start()
-    yield w
-    w.stop()
-
-
-def test_generate_answers_question_about_uploaded_document(authed_client, llm_ingestion_worker, llm_worker) -> None:
-    pdf_bytes = (DOCUMENTS_DIR / "report.pdf").read_bytes()
-    resource_id = authed_client.post(
-        "/api/upload-resource", files={"file": ("report.pdf", pdf_bytes, "application/pdf")},
-    ).json()["id"]
-
-    chat_id = authed_client.post(
-        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
-    ).json()["id"]
-    ingestion_assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-    with authed_client.stream(
-        "GET", f"/api/chats/{chat_id}/messages/{ingestion_assistant_id}/stream"
-    ) as resp:
-        list(resp.iter_lines())
-    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "complete"
-
-    authed_client.post(
-        f"/api/chats/{chat_id}/messages",
-        json={"content": "What is the launch code mentioned in the document? Reply with just the code, nothing else."},
-    )
-    answer_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[3]["id"]
-    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{answer_id}/stream") as resp:
-        list(resp.iter_lines())
-
-    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
-    assert messages[3]["status"] == "complete"
-    assert "bluebird-7" in messages[3]["content"].lower()
