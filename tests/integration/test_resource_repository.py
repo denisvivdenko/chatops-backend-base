@@ -10,9 +10,7 @@ from chatops.repositories.resource_repository import MongoResourceRepository
 MONGO_TEST_DB = "chatops_test"
 
 
-@pytest.fixture(params=[
-    pytest.param("mongo", marks=pytest.mark.integration),
-])
+@pytest.fixture
 def resource_repo() -> Iterator[MongoResourceRepository]:
     mongo_host = os.environ.get("MONGO_HOST", "localhost")
     mongo_client = pymongo.MongoClient(mongo_host, 27017)
