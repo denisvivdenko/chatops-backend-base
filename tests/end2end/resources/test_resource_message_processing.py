@@ -14,7 +14,7 @@ from chatops.workers.worker import Worker
 from conftest import sleep_until_message_timed_out
 
 PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
-DOCUMENTS_DIR = Path(__file__).parent.parent / "fixtures" / "documents"
+DOCUMENTS_DIR = Path(__file__).parent / "fixtures" / "documents"
 
 
 def _upload_resource(client, filename: str = "report.pdf") -> str:

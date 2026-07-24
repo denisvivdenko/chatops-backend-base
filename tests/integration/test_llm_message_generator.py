@@ -11,7 +11,7 @@ from chatops.workers.llm_message_generator import LLMMessageGenerator
 
 USER_ID = "test-user"
 MODEL = "gpt-4o-mini"
-IMAGES_DIR = Path(__file__).parent.parent / "fixtures" / "images"
+IMAGES_DIR = Path(__file__).parent / "fixtures" / "images"
 
 
 def _image_markdown(filename: str) -> str:
