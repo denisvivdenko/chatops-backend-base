@@ -55,6 +55,27 @@ def test_user_cannot_modify_message_in_another_users_chat(client):
     assert response.status_code == 403
 
 
+def test_user_cannot_modify_message_with_another_users_resource_ref(client):
+    token_a = new_user_token(client)
+    token_b = new_user_token(client)
+    resource_id = client.post(
+        "/api/upload-resource",
+        files={"file": ("report.pdf", b"%PDF-1.4\n%mock pdf content", "application/pdf")},
+        headers=auth_headers(token_b),
+    ).json()["id"]
+    chat_id = create_chat(client, "Hello", headers=auth_headers(token_a))
+    user_message_id = get_messages(client, chat_id, headers=auth_headers(token_a))[0]["id"]
+
+    response = client.post(
+        f"/api/chats/{chat_id}/messages/{user_message_id}/modify",
+        json={"content": f"[report.pdf](resource://{resource_id})"},
+        headers=auth_headers(token_a),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "forbidden"
+
+
 def test_user_cannot_delete_another_users_chat(client):
     token_a = new_user_token(client)
     token_b = new_user_token(client)

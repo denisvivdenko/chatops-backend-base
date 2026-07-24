@@ -1,4 +1,4 @@
-from .helpers import create_chat, get_messages, new_user_token
+from .helpers import create_chat, get_messages
 
 
 def test_fetch_messages_for_nonexistent_chat_returns_404(authed_client):
@@ -69,29 +69,6 @@ def test_modify_message_with_nonexistent_resource_ref_returns_404(authed_client)
 
     assert response.status_code == 404
     assert response.json()["error"] == "resource_not_found"
-
-
-def test_modify_message_with_another_users_resource_ref_returns_403(client):
-    token_a = new_user_token(client)
-    token_b = new_user_token(client)
-
-    resource_id = client.post(
-        "/api/upload-resource",
-        files={"file": ("report.pdf", b"%PDF-1.4\n%mock pdf content", "application/pdf")},
-        headers={"Authorization": f"Bearer {token_b}"},
-    ).json()["id"]
-
-    client.headers["Authorization"] = f"Bearer {token_a}"
-    chat_id = create_chat(client, "Hello")
-    user_message_id = get_messages(client, chat_id)[0]["id"]
-
-    response = client.post(
-        f"/api/chats/{chat_id}/messages/{user_message_id}/modify",
-        json={"content": f"[report.pdf](resource://{resource_id})"},
-    )
-
-    assert response.status_code == 403
-    assert response.json()["error"] == "forbidden"
 
 
 def test_stream_for_nonexistent_chat_returns_404(authed_client):
