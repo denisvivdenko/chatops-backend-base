@@ -1,3 +1,6 @@
+from ..helpers import create_chat, get_messages, stream_to_completion
+
+
 def test_create_chat(authed_client):
     response = authed_client.post("/api/chats", json={"message": "Hello"})
 
@@ -10,14 +13,13 @@ def test_create_chat(authed_client):
 
 
 def test_list_chats_sorted_most_recent_first(authed_client_with_worker):
-    chat1_id = authed_client_with_worker.post("/api/chats", json={"message": "First"}).json()["id"]
-    chat2_id = authed_client_with_worker.post("/api/chats", json={"message": "Second"}).json()["id"]
+    chat1_id = create_chat(authed_client_with_worker, "First")
+    chat2_id = create_chat(authed_client_with_worker, "Second")
 
     # drain SSE for both so their assistants are complete and we can send follow-ups
     for chat_id in [chat1_id, chat2_id]:
-        assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-        with authed_client_with_worker.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
-            list(resp.iter_lines())
+        assistant_id = get_messages(authed_client_with_worker, chat_id)[1]["id"]
+        stream_to_completion(authed_client_with_worker, chat_id, assistant_id)
 
     # chat2 is currently first (created more recently)
     chats = authed_client_with_worker.get("/api/chats?limit=10").json()
@@ -32,7 +34,7 @@ def test_list_chats_sorted_most_recent_first(authed_client_with_worker):
 
 def test_list_chats_respects_limit(authed_client):
     for i in range(3):
-        authed_client.post("/api/chats", json={"message": f"Message {i}"})
+        create_chat(authed_client, f"Message {i}")
 
     response = authed_client.get("/api/chats?limit=2")
 
@@ -41,7 +43,7 @@ def test_list_chats_respects_limit(authed_client):
 
 
 def test_delete_chat(authed_client):
-    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
+    chat_id = create_chat(authed_client, "Hello")
 
     response = authed_client.delete(f"/api/chats/{chat_id}")
 

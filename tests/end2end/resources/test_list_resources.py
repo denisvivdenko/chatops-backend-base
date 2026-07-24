@@ -1,4 +1,5 @@
-PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
+from .helpers import PDF_CONTENT, upload_resource
+from ..helpers import new_user_token
 
 
 def test_list_resources_empty_for_user_with_no_uploads(authed_client) -> None:
@@ -9,8 +10,8 @@ def test_list_resources_empty_for_user_with_no_uploads(authed_client) -> None:
 
 
 def test_list_resources_returns_only_calling_users_resources(client) -> None:
-    token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
-    token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token_a = new_user_token(client)
+    token_b = new_user_token(client)
 
     client.post(
         "/api/upload-resource",
@@ -29,8 +30,8 @@ def test_list_resources_returns_only_calling_users_resources(client) -> None:
 
 
 def test_list_resources_ordered_most_recently_uploaded_first(authed_client) -> None:
-    authed_client.post("/api/upload-resource", files={"file": ("first.pdf", PDF_CONTENT, "application/pdf")})
-    authed_client.post("/api/upload-resource", files={"file": ("second.pdf", PDF_CONTENT, "application/pdf")})
+    upload_resource(authed_client, "first.pdf")
+    upload_resource(authed_client, "second.pdf")
 
     resources = authed_client.get("/api/resources").json()
 

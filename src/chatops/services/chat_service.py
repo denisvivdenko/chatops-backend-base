@@ -1,3 +1,4 @@
+import logging
 import uuid
 import time
 
@@ -6,6 +7,8 @@ from chatops.repositories.chat_repository import ChatRepository
 from chatops.services.resource_service import ResourceService
 from chatops.settings import MessageTimeoutSettings
 from chatops.stream.job_stream import Job, JobStream
+
+logger = logging.getLogger(__name__)
 
 
 class AssistantMessagePendingError(Exception):
@@ -241,6 +244,12 @@ class ChatService:
         self, chat_id: str, user_id: str, message_id: str, status: MessageStatus, content: str | None = None,
     ) -> None:
         message = self.get_message(chat_id, user_id, message_id)
+        if status == message.status:
+            logger.warning(
+                "Message chat_id=%s message_id=%s already has status=%s, skipping transition",
+                chat_id, message_id, status,
+            )
+            return
         if status not in ALLOWED_MESSAGE_STATUS_TRANSITIONS[message.status]:
             raise MessageStatusTransitionError(
                 f"Failed to change message status from {message.status} to {status}"

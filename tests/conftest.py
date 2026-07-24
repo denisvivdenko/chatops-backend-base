@@ -7,6 +7,7 @@ import pymongo
 import pytest
 import redis as redis_lib
 from fastapi.testclient import TestClient
+from openai import OpenAI
 
 from chatops.api.main import app
 from chatops.api.dependencies import (
@@ -33,8 +34,12 @@ from chatops.services.chat_service import ChatService
 from chatops.services.resource_service import ResourceService
 from chatops.workers.worker import Worker
 from chatops.workers.response_generator import MessageGeneration, ResourceIngestion, TEST_RESPONSE
+from chatops.workers.llm_message_generator import LLMMessageGenerator
+from chatops.workers.llm_resource_ingestion import LLMResourceIngestion
 
 MONGO_TEST_DB = "chatops_test"
+LLM_MODEL = "gpt-4o-mini"
+TEST_JOB_STREAM_TIMEOUT = 0.05  # keeps worker.stop() teardown fast: BRPOP still returns instantly for queued jobs
 
 
 def pytest_addoption(parser):
@@ -74,8 +79,8 @@ def infra(request):
         resource_repo=MongoResourceRepository(mongo_client, db_name=MONGO_TEST_DB),
         resource_storage=ResourceStorage(resource_storage_dir),
         redis_client=redis_client,
-        job_stream=RedisJobStream(redis_client),
-        ingestion_job_stream=RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY),
+        job_stream=RedisJobStream(redis_client, timeout=TEST_JOB_STREAM_TIMEOUT),
+        ingestion_job_stream=RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY, timeout=TEST_JOB_STREAM_TIMEOUT),
         event_stream=RedisEventStream(redis_client),
     )
 
@@ -190,3 +195,38 @@ def authed_client_with_ingestion_worker(client_with_ingestion_worker):
     token = client_with_ingestion_worker.post("/api/auth/anonymous-session").json()["access_token"]
     client_with_ingestion_worker.headers["Authorization"] = f"Bearer {token}"
     yield client_with_ingestion_worker
+
+
+@pytest.fixture
+def openai_client(settings: Settings) -> OpenAI:
+    if not settings.openai_api_key:
+        pytest.skip("OPENAI_API_KEY not set")
+    return OpenAI(api_key=settings.openai_api_key)
+
+
+@pytest.fixture
+def llm_worker(infra, settings, openai_client):
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
+    w = Worker(
+        jobs_stream=infra["job_stream"],
+        chat_service=chat_service,
+        event_stream=_make_event_stream(infra, settings),
+        response_generator=LLMMessageGenerator(chat_service=chat_service, client=openai_client, model=LLM_MODEL),
+    ).start()
+    yield w
+    w.stop()
+
+
+@pytest.fixture
+def llm_ingestion_worker(infra, settings, openai_client):
+    resource_service = ResourceService(resource_repository=infra["resource_repo"], resource_storage=infra["resource_storage"])
+    chat_service = ChatService(chat_repository=infra["repo"], resource_service=resource_service)
+    w = Worker(
+        jobs_stream=infra["ingestion_job_stream"],
+        chat_service=chat_service,
+        event_stream=_make_event_stream(infra, settings),
+        response_generator=LLMResourceIngestion(resource_service=resource_service, client=openai_client, model=LLM_MODEL),
+    ).start()
+    yield w
+    w.stop()

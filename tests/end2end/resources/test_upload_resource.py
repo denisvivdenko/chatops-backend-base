@@ -1,4 +1,5 @@
-PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
+from .helpers import PDF_CONTENT
+from ..helpers import new_user_token
 
 
 def test_upload_valid_pdf_returns_id_and_filename(authed_client) -> None:
@@ -65,8 +66,8 @@ def test_upload_same_filename_twice_replaces_existing_resource(authed_client) ->
 
 
 def test_two_users_uploading_same_filename_get_different_ids(client) -> None:
-    token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
-    token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token_a = new_user_token(client)
+    token_b = new_user_token(client)
 
     response_a = client.post(
         "/api/upload-resource",

@@ -13,4 +13,4 @@ build:
 TEST ?= tests/
 
 test:
-	docker compose --profile tests run --rm --build tests pytest $(TEST) --integration -v
+	docker compose --profile tests run --rm --build tests pytest $(TEST) --integration -vv --durations=50

@@ -1,3 +1,6 @@
+from ..helpers import new_user_token
+
+
 def test_anonymous_session_returns_access_token(client):
     response = client.post("/api/auth/anonymous-session")
 
@@ -15,7 +18,7 @@ def test_anonymous_session_sets_refresh_cookie(client):
 
 
 def test_two_anonymous_sessions_get_different_access_tokens(client):
-    token1 = client.post("/api/auth/anonymous-session").json()["access_token"]
-    token2 = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token1 = new_user_token(client)
+    token2 = new_user_token(client)
 
     assert token1 != token2

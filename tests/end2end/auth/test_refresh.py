@@ -2,6 +2,7 @@ import time
 import pytest
 
 from .helpers import auth_headers
+from ..helpers import create_chat, new_user_token
 
 
 def test_refresh_returns_new_access_token(client):
@@ -14,8 +15,8 @@ def test_refresh_returns_new_access_token(client):
 
 
 def test_refreshed_access_token_grants_access_to_own_chats(client):
-    old_token = client.post("/api/auth/anonymous-session").json()["access_token"]
-    chat_id = client.post("/api/chats", json={"message": "Hello"}, headers=auth_headers(old_token)).json()["id"]
+    old_token = new_user_token(client)
+    chat_id = create_chat(client, "Hello", headers=auth_headers(old_token))
 
     new_token = client.post("/api/auth/refresh").json()["access_token"]
 

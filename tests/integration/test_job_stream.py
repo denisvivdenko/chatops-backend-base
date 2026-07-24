@@ -1,24 +1,12 @@
-import os
-from typing import Iterator
-
 import pytest
 import redis as redis_lib
 
 from chatops.stream.job_stream import REDIS_INGESTION_JOBS_KEY, Job, RedisJobStream
 
 
-@pytest.fixture(params=[
-    pytest.param("redis", marks=pytest.mark.integration),
-])
-def job_stream(request: pytest.FixtureRequest) -> Iterator[RedisJobStream]:
-    redis_host = os.environ.get("REDIS_HOST", "localhost")
-    client = redis_lib.Redis(host=redis_host, port=6379, db=1)
-    client.flushdb()
-
-    yield RedisJobStream(client, redis_key=REDIS_INGESTION_JOBS_KEY, timeout=0.1)
-
-    client.flushdb()
-    client.close()
+@pytest.fixture
+def job_stream(redis_client: redis_lib.Redis) -> RedisJobStream:
+    return RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY, timeout=0.1)
 
 
 def test_publish_then_consume_round_trips_fields(job_stream: RedisJobStream) -> None:
