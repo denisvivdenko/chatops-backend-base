@@ -2,6 +2,7 @@ import time
 import pytest
 
 from .helpers import auth_headers
+from ..helpers import new_user_token
 
 
 def test_list_chats_without_token_is_rejected(client):
@@ -23,7 +24,7 @@ def test_request_with_garbage_token_is_rejected(client):
 
 
 def test_request_with_tampered_token_is_rejected(client):
-    token = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token = new_user_token(client)
     # flip the second-to-last char, not the last: base64's final char can carry
     # unused padding bits, so tampering only it can decode to the same signature bytes
     tampered = token[:-2] + ("a" if token[-2] != "a" else "b") + token[-1]
@@ -39,7 +40,7 @@ def test_request_with_tampered_token_is_rejected(client):
     indirect=True,
 )
 def test_expired_access_token_is_rejected(client):
-    token = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token = new_user_token(client)
 
     time.sleep(0.1)
 

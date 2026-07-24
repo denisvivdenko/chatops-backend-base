@@ -1,4 +1,5 @@
 from .helpers import PDF_CONTENT, upload_resource
+from ..helpers import new_user_token
 
 
 def test_list_resources_empty_for_user_with_no_uploads(authed_client) -> None:
@@ -9,8 +10,8 @@ def test_list_resources_empty_for_user_with_no_uploads(authed_client) -> None:
 
 
 def test_list_resources_returns_only_calling_users_resources(client) -> None:
-    token_a = client.post("/api/auth/anonymous-session").json()["access_token"]
-    token_b = client.post("/api/auth/anonymous-session").json()["access_token"]
+    token_a = new_user_token(client)
+    token_b = new_user_token(client)
 
     client.post(
         "/api/upload-resource",

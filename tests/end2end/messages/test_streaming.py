@@ -4,6 +4,8 @@ import pytest
 from chatops.workers.response_generator import TEST_RESPONSE
 from conftest import sleep_until_message_timed_out
 
+from ..helpers import create_chat, get_messages, stream_to_completion
+
 
 def test_stream_assistant_response_and_emits_done_event_on_completion(authed_client_with_worker):
 
@@ -20,8 +22,8 @@ def test_stream_assistant_response_and_emits_done_event_on_completion(authed_cli
             prev = line
         return events
 
-    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    chat_id = create_chat(authed_client_with_worker, "Hello")
+    assistant_id = get_messages(authed_client_with_worker, chat_id)[1]["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
     first_raw: list[str] = []
@@ -51,8 +53,8 @@ def test_stream_assistant_response_and_emits_done_event_on_completion(authed_cli
     indirect=True,
 )
 def test_stream_emits_error_event_when_generation_times_out(authed_client):
-    chat_id = authed_client.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    chat_id = create_chat(authed_client, "Hello")
+    assistant_id = get_messages(authed_client, chat_id)[1]["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
     with authed_client.stream("GET", url) as response:
@@ -70,8 +72,8 @@ def test_stream_emits_error_event_when_generation_times_out(authed_client):
     indirect=True,
 )
 def test_reopening_stream_after_generation_timeout_receives_error(authed_client_with_worker, settings):
-    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_message = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]
+    chat_id = create_chat(authed_client_with_worker, "Hello")
+    assistant_message = get_messages(authed_client_with_worker, chat_id)[1]
     assistant_id = assistant_message["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
@@ -92,12 +94,11 @@ def test_reopening_stream_after_generation_timeout_receives_error(authed_client_
 
 
 def test_message_generated_via_llm_worker_completes_end_to_end(authed_client, llm_worker) -> None:
-    chat_id = authed_client.post("/api/chats", json={"message": "Reply with exactly one word: 'PONG'"}).json()["id"]
-    assistant_id = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
+    chat_id = create_chat(authed_client, "Reply with exactly one word: 'PONG'")
+    assistant_id = get_messages(authed_client, chat_id)[1]["id"]
 
-    with authed_client.stream("GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream") as resp:
-        list(resp.iter_lines())
+    stream_to_completion(authed_client, chat_id, assistant_id)
 
-    messages = authed_client.get(f"/api/chats/{chat_id}/messages").json()
+    messages = get_messages(authed_client, chat_id)
     assert messages[1]["status"] == "complete"
     assert "pong" in messages[1]["content"].lower()
