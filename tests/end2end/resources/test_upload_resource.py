@@ -1,4 +1,4 @@
-PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
+from .helpers import PDF_CONTENT
 
 
 def test_upload_valid_pdf_returns_id_and_filename(authed_client) -> None:

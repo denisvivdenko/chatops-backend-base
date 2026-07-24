@@ -5,12 +5,14 @@ from chatops.workers.response_generator import TEST_RESPONSE
 from conftest import sleep_until_message_timed_out
 
 
-def test_stream_assistant_response(authed_client_with_worker):
+def test_stream_assistant_response_and_emits_done_event_on_completion(authed_client_with_worker):
 
-    def _collect_events(lines, limit=None):
+    def _collect_events(lines, raw, limit=None):
         events = []
         prev = None
         for line in lines:
+            if line:
+                raw.append(line)
             if line.startswith("data: ") and not (prev or "").startswith("event:"):
                 events.append(json.loads(line[6:]))
                 if limit and len(events) >= limit:
@@ -22,33 +24,25 @@ def test_stream_assistant_response(authed_client_with_worker):
     assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
     url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
 
+    first_raw: list[str] = []
     with authed_client_with_worker.stream("GET", url) as first_resp:
         assert first_resp.status_code == 200
         assert first_resp.headers["content-type"] == "text/event-stream; charset=utf-8"
         first_iter = first_resp.iter_lines()
 
-        first_events = _collect_events(first_iter, limit=3)
+        first_events = _collect_events(first_iter, first_raw, limit=3)
 
         with authed_client_with_worker.stream("GET", url) as second_resp:
-            second_events = _collect_events(second_resp.iter_lines())
+            second_events = _collect_events(second_resp.iter_lines(), [])
 
-        first_events += _collect_events(first_iter)
+        first_events += _collect_events(first_iter, first_raw)
 
     assert [e["seq_id"] for e in first_events] == list(range(len(first_events)))
     assert "".join(e["token"] for e in first_events) == TEST_RESPONSE
     assert "".join(e["token"] for e in second_events) == TEST_RESPONSE
 
-
-def test_stream_emits_done_event_on_completion(authed_client_with_worker):
-    chat_id = authed_client_with_worker.post("/api/chats", json={"message": "Hello"}).json()["id"]
-    assistant_id = authed_client_with_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-    url = f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
-
-    with authed_client_with_worker.stream("GET", url) as response:
-        lines = [line for line in response.iter_lines() if line]
-
-    assert lines[-2] == "event: done"
-    assert json.loads(lines[-1].removeprefix("data: ")) == {"status": "complete"}
+    assert first_raw[-2] == "event: done"
+    assert json.loads(first_raw[-1].removeprefix("data: ")) == {"status": "complete"}
 
 
 @pytest.mark.parametrize(

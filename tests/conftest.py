@@ -39,6 +39,7 @@ from chatops.workers.llm_resource_ingestion import LLMResourceIngestion
 
 MONGO_TEST_DB = "chatops_test"
 LLM_MODEL = "gpt-4o-mini"
+TEST_JOB_STREAM_TIMEOUT = 0.05  # keeps worker.stop() teardown fast: BRPOP still returns instantly for queued jobs
 
 
 def pytest_addoption(parser):
@@ -78,8 +79,8 @@ def infra(request):
         resource_repo=MongoResourceRepository(mongo_client, db_name=MONGO_TEST_DB),
         resource_storage=ResourceStorage(resource_storage_dir),
         redis_client=redis_client,
-        job_stream=RedisJobStream(redis_client),
-        ingestion_job_stream=RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY),
+        job_stream=RedisJobStream(redis_client, timeout=TEST_JOB_STREAM_TIMEOUT),
+        ingestion_job_stream=RedisJobStream(redis_client, redis_key=REDIS_INGESTION_JOBS_KEY, timeout=TEST_JOB_STREAM_TIMEOUT),
         event_stream=RedisEventStream(redis_client),
     )
 

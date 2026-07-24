@@ -13,15 +13,9 @@ from chatops.workers.response_generator import DOCUMENT_PROCESSED_RESPONSE, Reso
 from chatops.workers.worker import Worker
 from conftest import sleep_until_message_timed_out
 
-PDF_CONTENT = b"%PDF-1.4\n%mock pdf content"
+from .helpers import upload_resource
+
 DOCUMENTS_DIR = Path(__file__).parent / "fixtures" / "documents"
-
-
-def _upload_resource(client, filename: str = "report.pdf") -> str:
-    response = client.post(
-        "/api/upload-resource", files={"file": (filename, PDF_CONTENT, "application/pdf")},
-    )
-    return response.json()["id"]
 
 
 def _make_service(infra) -> ChatService:
@@ -34,14 +28,16 @@ def _decode_user_id(authed_client) -> str:
     return jwt.decode(token, options={"verify_signature": False})["sub"]
 
 
-def test_create_chat_with_resource_ref_is_processed_by_ingestion_worker(authed_client_with_ingestion_worker):
-    resource_id = _upload_resource(authed_client_with_ingestion_worker)
+def test_ingestion_worker_completes_resource_ref_messages_on_create_follow_up_and_modify(
+    authed_client_with_ingestion_worker,
+):
+    resource_id = upload_resource(authed_client_with_ingestion_worker)
 
+    # a resource ref in the initial message is processed
     chat_id = authed_client_with_ingestion_worker.post(
         "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
     ).json()["id"]
     assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-
     with authed_client_with_ingestion_worker.stream(
         "GET", f"/api/chats/{chat_id}/messages/{assistant_id}/stream"
     ) as resp:
@@ -52,33 +48,48 @@ def test_create_chat_with_resource_ref_is_processed_by_ingestion_worker(authed_c
     assert messages[1]["status"] == "complete"
     assert messages[1]["content"] == DOCUMENT_PROCESSED_RESPONSE
 
-
-def test_follow_up_message_with_resource_ref_is_processed_by_ingestion_worker(authed_client_with_ingestion_worker):
-    resource_id = _upload_resource(authed_client_with_ingestion_worker)
-
-    chat_id = authed_client_with_ingestion_worker.post(
-        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
-    ).json()["id"]
-    first_assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-    with authed_client_with_ingestion_worker.stream(
-        "GET", f"/api/chats/{chat_id}/messages/{first_assistant_id}/stream"
-    ) as resp:
-        list(resp.iter_lines())
-
+    # a resource ref in a follow-up message is processed the same way
     authed_client_with_ingestion_worker.post(
         f"/api/chats/{chat_id}/messages", json={"content": f"[report.pdf](resource://{resource_id})"},
     )
-    second_assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[3]["id"]
-
+    follow_up_assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[3]["id"]
     with authed_client_with_ingestion_worker.stream(
-        "GET", f"/api/chats/{chat_id}/messages/{second_assistant_id}/stream"
+        "GET", f"/api/chats/{chat_id}/messages/{follow_up_assistant_id}/stream"
     ) as resp:
         list(resp.iter_lines())
 
     messages = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()
-    assert messages[3]["id"] == second_assistant_id
+    assert messages[3]["id"] == follow_up_assistant_id
     assert messages[3]["status"] == "complete"
     assert messages[3]["content"] == DOCUMENT_PROCESSED_RESPONSE
+
+    # a resource ref added via modify, in a fresh chat, is processed the same way
+    other_chat_id = authed_client_with_ingestion_worker.post(
+        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
+    ).json()["id"]
+    other_user_message_id = authed_client_with_ingestion_worker.get(f"/api/chats/{other_chat_id}/messages").json()[0]["id"]
+    other_first_assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{other_chat_id}/messages").json()[1]["id"]
+    with authed_client_with_ingestion_worker.stream(
+        "GET", f"/api/chats/{other_chat_id}/messages/{other_first_assistant_id}/stream"
+    ) as resp:
+        list(resp.iter_lines())
+
+    modify_response = authed_client_with_ingestion_worker.post(
+        f"/api/chats/{other_chat_id}/messages/{other_user_message_id}/modify",
+        json={"content": f"Please check [report.pdf](resource://{resource_id})"},
+    )
+    assert modify_response.status_code == 200
+    new_assistant_id = modify_response.json()["id"]
+
+    with authed_client_with_ingestion_worker.stream(
+        "GET", f"/api/chats/{other_chat_id}/messages/{new_assistant_id}/stream"
+    ) as resp:
+        list(resp.iter_lines())
+
+    messages = authed_client_with_ingestion_worker.get(f"/api/chats/{other_chat_id}/messages").json()
+    assert messages[1]["id"] == new_assistant_id
+    assert messages[1]["status"] == "complete"
+    assert messages[1]["content"] == DOCUMENT_PROCESSED_RESPONSE
 
 
 @pytest.mark.parametrize(
@@ -87,7 +98,7 @@ def test_follow_up_message_with_resource_ref_is_processed_by_ingestion_worker(au
     indirect=True,
 )
 def test_retry_of_failed_resource_ref_message_is_processed_by_ingestion_worker(authed_client, settings, infra, request):
-    resource_id = _upload_resource(authed_client)
+    resource_id = upload_resource(authed_client)
 
     chat_id = authed_client.post(
         "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
@@ -114,14 +125,14 @@ def test_retry_of_failed_resource_ref_message_is_processed_by_ingestion_worker(a
 
 @pytest.mark.parametrize("settings", [{"message_timeout": {"resource_processing_timeout": 0.05}}], indirect=True)
 def test_ingestion_worker_discards_stale_job_for_message_already_failed_by_timeout(authed_client, settings, request) -> None:
-    resource_id = _upload_resource(authed_client, "doc.pdf")
+    resource_id = upload_resource(authed_client, "doc.pdf")
     chat_id = authed_client.post("/api/chats", json={"message": f"[doc.pdf](resource://{resource_id})"}).json()["id"]
     assistant_message = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]
 
     sleep_until_message_timed_out(assistant_message, settings.message_timeout)  # no ingestion worker running yet, so this message's job sits stale in the queue
     assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
 
-    other_resource_id = _upload_resource(authed_client, "other.pdf")
+    other_resource_id = upload_resource(authed_client, "other.pdf")
     other_chat_id = authed_client.post(
         "/api/chats", json={"message": f"[other.pdf](resource://{other_resource_id})"}
     ).json()["id"]
@@ -147,7 +158,7 @@ def test_ingestion_worker_discards_job_for_nonexistent_message(authed_client, in
     )
 
     # worker must discard the bogus job and keep processing subsequent ones
-    resource_id = _upload_resource(authed_client, "doc.pdf")
+    resource_id = upload_resource(authed_client, "doc.pdf")
     other_chat_id = authed_client.post(
         "/api/chats", json={"message": f"[doc.pdf](resource://{resource_id})"}
     ).json()["id"]
@@ -159,7 +170,7 @@ def test_ingestion_worker_discards_job_for_nonexistent_message(authed_client, in
 
 
 def test_ingestion_worker_fails_message_on_processing_exception(authed_client, infra) -> None:
-    resource_id = _upload_resource(authed_client, "doc.pdf")
+    resource_id = upload_resource(authed_client, "doc.pdf")
     chat_id = authed_client.post("/api/chats", json={"message": f"[doc.pdf](resource://{resource_id})"}).json()["id"]
 
     broken_event_stream = MagicMock(spec=EventStream)
@@ -169,23 +180,28 @@ def test_ingestion_worker_fails_message_on_processing_exception(authed_client, i
         response_generator=ResourceIngestion(),
     ).start()
     try:
-        time.sleep(0.3)
+        status = None
+        for _ in range(20):
+            status = authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"]
+            if status == "failed":
+                break
+            time.sleep(0.05)
     finally:
         worker.stop()
 
-    assert authed_client.get(f"/api/chats/{chat_id}/messages").json()[1]["status"] == "failed"
+    assert status == "failed"
 
 
 @pytest.mark.parametrize(
     "settings",
     [{
         "event_stream_timeout": 0.05,
-        "message_timeout": {"message_generation_timeout": 0.1, "resource_processing_timeout": 0.5},
+        "message_timeout": {"message_generation_timeout": 0.05, "resource_processing_timeout": 0.2},
     }],
     indirect=True,
 )
 def test_stream_uses_resource_processing_timeout_for_resource_messages(authed_client):
-    resource_id = _upload_resource(authed_client)
+    resource_id = upload_resource(authed_client)
     chat_id = authed_client.post(
         "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
     ).json()["id"]
@@ -197,38 +213,7 @@ def test_stream_uses_resource_processing_timeout_for_resource_messages(authed_cl
     elapsed = time.monotonic() - start
 
     assert "event: error" in lines
-    assert elapsed > 0.3  # governed by resource_processing_timeout (0.5s), not message_generation_timeout (0.1s)
-
-
-def test_modify_message_adding_resource_ref_is_processed_by_ingestion_worker(authed_client_with_ingestion_worker):
-    resource_id = _upload_resource(authed_client_with_ingestion_worker)
-
-    chat_id = authed_client_with_ingestion_worker.post(
-        "/api/chats", json={"message": f"[report.pdf](resource://{resource_id})"},
-    ).json()["id"]
-    user_message_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[0]["id"]
-    first_assistant_id = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()[1]["id"]
-    with authed_client_with_ingestion_worker.stream(
-        "GET", f"/api/chats/{chat_id}/messages/{first_assistant_id}/stream"
-    ) as resp:
-        list(resp.iter_lines())
-
-    modify_response = authed_client_with_ingestion_worker.post(
-        f"/api/chats/{chat_id}/messages/{user_message_id}/modify",
-        json={"content": f"Please check [report.pdf](resource://{resource_id}) again"},
-    )
-    assert modify_response.status_code == 200
-    new_assistant_id = modify_response.json()["id"]
-
-    with authed_client_with_ingestion_worker.stream(
-        "GET", f"/api/chats/{chat_id}/messages/{new_assistant_id}/stream"
-    ) as resp:
-        list(resp.iter_lines())
-
-    messages = authed_client_with_ingestion_worker.get(f"/api/chats/{chat_id}/messages").json()
-    assert messages[1]["id"] == new_assistant_id
-    assert messages[1]["status"] == "complete"
-    assert messages[1]["content"] == DOCUMENT_PROCESSED_RESPONSE
+    assert elapsed > 0.1  # governed by resource_processing_timeout (0.2s), not message_generation_timeout (0.05s)
 
 
 def test_generate_answers_question_about_uploaded_document(authed_client, llm_ingestion_worker, llm_worker) -> None:
